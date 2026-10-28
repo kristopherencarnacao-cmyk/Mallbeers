@@ -1,0 +1,1142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mall Beer Counter</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@500;700&family=Ubuntu:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+/* Layout idea: a retro pixel "hotel room" mall floor is the hero; chunky window panels hold the controls. One committed visual world (single theme). */
+:root{
+  --page:#162533;
+  --page-2:#1a2b3a;
+  --chrome:#2b6a94;
+  --surface:#eef1f3;
+  --surface-2:#dde3e8;
+  --ink:#141a22;
+  --ink-2:#4a5562;
+  --line:#0f1720;
+  --gold:#f2c230;
+  --gold-dk:#a87c0a;
+  --gold-soft:#fff3c4;
+  --ok:#2f8a4a;
+  --ok-soft:#d6f0dc;
+  --void:#0e1822;
+  --font-display:"Pixelify Sans","Courier New",monospace;
+  --font-body:"Ubuntu",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --r-sm:4px; --r-md:6px;
+  --ease-out:cubic-bezier(.2,.8,.2,1);
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{
+  background-color:var(--page);
+  background-image:repeating-conic-gradient(var(--page-2) 0 25%, var(--page) 0 50%);
+  background-size:16px 16px;
+  color:var(--ink);
+  font:400 1rem/1.5 var(--font-body);
+  -webkit-font-smoothing:antialiased;
+}
+h1,h2,h3{font-family:var(--font-display);font-weight:700;line-height:1.2;margin:0;text-wrap:balance}
+img.ico,canvas.px{image-rendering:pixelated;image-rendering:crisp-edges}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.num{font-variant-numeric:tabular-nums}
+:focus-visible{outline:3px solid var(--line);outline-offset:2px;box-shadow:0 0 0 6px var(--gold)}
+
+/* Header */
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:.5rem 1rem;background:var(--chrome);color:#fff;border-bottom:3px solid var(--line)}
+.brand{display:flex;align-items:center;gap:.75rem}
+.brand h1{font-size:1.25rem;letter-spacing:.02em}
+.brand img{width:30px;height:36px}
+.me{display:flex;align-items:center;gap:.75rem}
+.me canvas{width:32px;height:54px}
+.total-chip{font-family:var(--font-display);font-size:1rem;background:var(--line);padding:.25rem .75rem;border-radius:var(--r-sm);border:2px solid #000}
+.total-chip b{color:var(--gold);font-size:1.25rem}
+
+/* Nav */
+nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:20;display:grid;grid-template-columns:repeat(4,1fr);background:var(--surface);border-top:3px solid var(--line);padding-bottom:env(safe-area-inset-bottom)}
+nav.tabs a{display:flex;align-items:center;justify-content:center;min-height:56px;font-family:var(--font-display);font-weight:500;font-size:1rem;color:var(--ink-2);text-decoration:none;border-top:4px solid transparent}
+nav.tabs a[aria-current="page"]{color:var(--ink);background:var(--gold-soft);border-top-color:var(--gold-dk);font-weight:700}
+main{max-width:1200px;margin:0 auto;padding:1rem 1rem calc(88px + env(safe-area-inset-bottom))}
+@media (min-width:768px){
+  nav.tabs{position:static;display:flex;gap:.5rem;max-width:1200px;margin:0 auto;padding:1rem 1rem 0;background:transparent;border:0}
+  nav.tabs a{min-height:44px;padding:0 1.25rem;border:2px solid var(--line);border-radius:var(--r-sm);background:var(--surface-2);color:var(--ink)}
+  nav.tabs a[aria-current="page"]{background:var(--gold);border-color:var(--line)}
+  main{padding-bottom:2rem}
+}
+
+/* Windows */
+.win{background:var(--surface);border:2px solid var(--line);border-radius:var(--r-md);box-shadow:0 4px 0 rgba(0,0,0,.35);overflow:hidden}
+.win-title{display:flex;align-items:center;justify-content:space-between;gap:.5rem;background:var(--chrome);color:#fff;font-family:var(--font-display);font-size:1rem;font-weight:700;padding:.5rem .75rem;border-bottom:2px solid var(--line)}
+.win-title small{font-family:var(--font-body);font-weight:400;font-size:.875rem;opacity:.9}
+.win-body{padding:1rem;display:grid;gap:1rem}
+.view[hidden]{display:none}
+.view{display:grid;gap:1rem}
+
+/* Stats */
+.stats{display:grid;grid-template-columns:repeat(2,1fr);gap:.75rem}
+@media (min-width:640px){.stats{grid-template-columns:repeat(4,1fr)}}
+.stat{padding:.75rem 1rem}
+.stat .big{font-family:var(--font-display);font-size:2rem;line-height:1.1;font-variant-numeric:tabular-nums}
+.stat .lbl{font-size:.875rem;color:var(--ink-2)}
+
+/* Map */
+.mapgrid{display:grid;gap:1rem;align-items:start}
+@media (min-width:960px){.mapgrid{grid-template-columns:minmax(0,1.65fr) minmax(320px,1fr)}}
+.mapwrap{position:relative;background:var(--void)}
+.mapwrap canvas{display:block;width:100%;height:auto;cursor:pointer;touch-action:manipulation}
+.pins{position:absolute;inset:0;pointer-events:none}
+.pin{position:absolute;transform:translate(-50%,-100%);display:flex;align-items:center;gap:4px;max-width:9.5rem;font:500 .75rem/1.2 var(--font-display);background:var(--surface);color:var(--ink);border:2px solid var(--line);border-radius:var(--r-sm);padding:2px 6px;white-space:nowrap}
+.pin span{overflow:hidden;text-overflow:ellipsis}
+.pin b{background:var(--line);color:var(--gold);border-radius:2px;padding:0 4px;font-variant-numeric:tabular-nums}
+.pin.sel{background:var(--gold)}
+.maphint{margin:0;padding:.75rem 1rem;font-size:.875rem;color:var(--ink-2);border-top:2px solid var(--line)}
+.side{display:grid;gap:1rem}
+
+/* Buttons */
+.btn{font:500 1rem/1.2 var(--font-body);min-height:48px;padding:.75rem 1rem;border:2px solid var(--line);border-radius:var(--r-sm);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:.5rem;background:var(--surface);color:var(--ink);box-shadow:inset 0 -3px 0 rgba(0,0,0,.15);transition:transform 120ms var(--ease-out),filter 120ms}
+.btn:hover{filter:brightness(1.05)}
+.btn:active{transform:translateY(2px);box-shadow:inset 0 -1px 0 rgba(0,0,0,.15)}
+.btn-primary{background:var(--gold);font-weight:700;box-shadow:inset 0 -4px 0 var(--gold-dk)}
+.btn-primary:active{box-shadow:inset 0 -1px 0 var(--gold-dk)}
+.btn-ghost{background:transparent;border-color:transparent;box-shadow:none;min-height:44px;padding:.5rem;text-decoration:underline;text-underline-offset:3px;color:var(--ink-2)}
+.btn-ghost:active{transform:none}
+.btn[disabled]{opacity:.5;cursor:not-allowed;transform:none}
+.btn-block{width:100%}
+.icon-btn{width:44px;height:44px;padding:0;min-height:44px}
+.row-actions{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center}
+
+/* Spot panel */
+.spot-head{display:flex;align-items:flex-start;justify-content:space-between;gap:.75rem}
+.spot-head h2{font-size:1.5rem;overflow-wrap:anywhere}
+.overline{font:700 .75rem/1.2 var(--font-body);letter-spacing:.08em;text-transform:uppercase;color:var(--ink-2)}
+.counter{display:flex;align-items:baseline;gap:.5rem;flex-wrap:wrap}
+.counter .big{font-family:var(--font-display);font-size:3rem;line-height:1;font-variant-numeric:tabular-nums}
+.muted{color:var(--ink-2)}
+fieldset.types{border:0;padding:0;margin:0;display:grid;grid-template-columns:repeat(4,1fr);gap:.5rem}
+fieldset.types legend{padding:0;margin-bottom:.5rem;font-weight:500}
+.chip{position:relative}
+.chip input{position:absolute;opacity:0;inset:0;margin:0;cursor:pointer}
+.chip span{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-height:64px;border:2px solid var(--line);border-radius:var(--r-sm);background:var(--surface-2);font-size:.875rem;font-weight:500}
+.chip span img{width:20px;height:24px}
+.chip input:checked + span{background:var(--gold-soft);box-shadow:inset 0 0 0 2px var(--gold-dk)}
+.chip input:focus-visible + span{outline:3px solid var(--line);outline-offset:2px;box-shadow:0 0 0 6px var(--gold)}
+fieldset.sizes{border:0;padding:0;margin:0;display:flex;flex-wrap:wrap;gap:.5rem}
+fieldset.sizes legend{padding:0;margin-bottom:.5rem;font-weight:500}
+.schip{position:relative;flex:1 1 5.5rem}
+.schip input{position:absolute;opacity:0;inset:0;margin:0;cursor:pointer}
+.schip span{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:52px;padding:.25rem .5rem;border:2px solid var(--line);border-radius:var(--r-sm);background:var(--surface-2);font-size:.875rem;font-weight:500;text-align:center;line-height:1.2}
+.schip small{font-weight:400;color:var(--ink-2);font-size:.75rem}
+.schip input:checked + span{background:var(--gold-soft);box-shadow:inset 0 0 0 2px var(--gold-dk)}
+.schip input:focus-visible + span{outline:3px solid var(--line);outline-offset:2px;box-shadow:0 0 0 6px var(--gold)}
+.fchips{display:flex;flex-wrap:wrap;gap:.5rem}
+.fchip{font:500 .875rem/1.2 var(--font-body);min-height:44px;padding:.5rem .875rem;border:2px solid var(--line);border-radius:999px;background:#fff;color:var(--ink);cursor:pointer;display:inline-flex;align-items:center;gap:.375rem}
+.fchip[aria-pressed="true"]{background:var(--chrome);color:#fff}
+.fchip[aria-pressed="true"]::before{content:"✓";font-weight:700}
+.fchip.add{border-style:dashed;background:transparent;color:var(--ink-2)}
+.logbtn{flex-direction:column;gap:2px;min-height:64px}
+.logbtn span{font-size:1.125rem}
+.logbtn small{font-weight:400;font-size:.875rem;overflow-wrap:anywhere}
+.field{display:grid;gap:.25rem}
+.field label{font-weight:500}
+.field input{font:inherit;min-height:48px;padding:.5rem .75rem;border:2px solid var(--line);border-radius:var(--r-sm);background:#fff;color:var(--ink)}
+.field .err{color:#9c2a24;font-size:.875rem;display:flex;gap:.25rem;align-items:center}
+.field .err[hidden]{display:none}
+.field input[aria-invalid="true"]{border-color:#9c2a24;background:#fff5f4}
+.empty{display:grid;gap:.75rem;justify-items:start;padding:.5rem 0}
+.empty p{margin:0;max-width:40ch}
+
+/* Next reward */
+.next{display:grid;grid-template-columns:48px 1fr;gap:.75rem;align-items:center}
+.next canvas{width:48px;height:81px}
+.bar{height:14px;border:2px solid var(--line);background:#fff;border-radius:2px;overflow:hidden}
+.bar i{display:block;height:100%;background:repeating-linear-gradient(90deg,var(--ok) 0 8px,#277a3f 8px 10px);transition:width 250ms var(--ease-out)}
+
+/* Spot list */
+.list{list-style:none;margin:0;padding:0}
+.list li + li{border-top:1px solid var(--surface-2)}
+.spotrow{width:100%;display:grid;grid-template-columns:16px 1fr auto;gap:.75rem;align-items:center;text-align:left;min-height:52px;padding:.5rem .75rem;background:transparent;border:0;font:inherit;color:inherit;cursor:pointer;border-radius:var(--r-sm)}
+.spotrow:hover{background:#fff}
+.spotrow[aria-current="true"]{background:var(--gold-soft)}
+.spotrow .nm{font-weight:500;overflow-wrap:anywhere}
+.spotrow .sub{display:block;font-size:.875rem;color:var(--ink-2);font-weight:400}
+.spotrow .ct{font-family:var(--font-display);font-size:1.25rem;font-variant-numeric:tabular-nums}
+.swatch{width:16px;height:16px;border:2px solid var(--line);border-radius:2px}
+.listhead{display:flex;align-items:center;justify-content:space-between;gap:.5rem}
+.listhead h3{font-size:1.125rem}
+
+/* Wardrobe */
+.ward{display:grid;gap:1rem;align-items:start}
+@media (min-width:900px){.ward{grid-template-columns:320px 1fr}}
+.stage{display:flex;justify-content:center;align-items:flex-end;min-height:320px;padding:1.5rem;background-color:#d8cdb4;background-image:repeating-conic-gradient(#cfc2a6 0 25%,#d8cdb4 0 50%);background-size:32px 32px}
+.stage canvas{width:160px;height:270px}
+.opt{display:grid;gap:.5rem}
+.opt h3{font-size:1rem}
+.swatches{display:flex;flex-wrap:wrap;gap:.5rem}
+.sw{width:44px;height:44px;border:2px solid var(--line);border-radius:var(--r-sm);cursor:pointer;padding:0}
+.sw[aria-pressed="true"]{box-shadow:0 0 0 3px var(--surface),0 0 0 5px var(--line)}
+.seg{display:flex;flex-wrap:wrap;gap:.5rem}
+.seg .btn[aria-pressed="true"]{background:var(--gold-soft);box-shadow:inset 0 0 0 2px var(--gold-dk)}
+.items{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:.75rem}
+.item{position:relative;display:flex;flex-direction:column;align-items:center;gap:.25rem;padding:.5rem;min-height:144px;border:2px solid var(--line);border-radius:var(--r-sm);background:#fff;cursor:pointer;font:inherit;font-size:.875rem;font-weight:500;color:var(--ink);text-align:center}
+.item canvas{width:48px;height:81px}
+.item small{font-weight:400;color:var(--ink-2);font-size:.75rem}
+.item[aria-pressed="true"]{background:var(--gold-soft);box-shadow:inset 0 0 0 2px var(--gold-dk)}
+.item[aria-disabled="true"]{background:var(--surface-2);cursor:help}
+.item[aria-disabled="true"] canvas{filter:grayscale(1) brightness(.55);opacity:.55}
+.item .lock{position:absolute;top:6px;right:6px;width:20px;height:24px}
+.slotgrp{display:grid;gap:.5rem}
+.slotgrp + .slotgrp{margin-top:.5rem}
+
+/* Rewards */
+.rewards{display:grid;gap:.75rem}
+@media (min-width:768px){.rewards{grid-template-columns:1fr 1fr}}
+.reward{display:grid;grid-template-columns:56px 1fr;gap:1rem;padding:1rem;align-items:start}
+.reward canvas{width:56px;height:94px}
+.reward.locked canvas{filter:grayscale(1) brightness(.55);opacity:.55}
+.reward h3{font-size:1.125rem}
+.reward .meta{display:grid;gap:.5rem}
+.reward .top{display:flex;justify-content:space-between;gap:.5rem;align-items:flex-start}
+.pill{display:inline-flex;align-items:center;gap:4px;font:700 .75rem/1.2 var(--font-body);padding:4px 8px;border:2px solid var(--line);border-radius:999px;white-space:nowrap}
+.pill.ok{background:var(--ok-soft);color:#1d5c30}
+.pill.lock{background:var(--surface-2);color:var(--ink-2)}
+.pill img{width:10px;height:12px}
+
+/* History */
+.day + .day{margin-top:.5rem}
+.day h3{font:700 .75rem/1.2 var(--font-body);letter-spacing:.08em;text-transform:uppercase;color:var(--ink-2);padding:.5rem 0}
+.entry{display:grid;grid-template-columns:24px 1fr auto 44px;gap:.75rem;align-items:center;min-height:52px;padding:.25rem 0}
+.entry img{width:20px;height:24px}
+.entry .t{font-variant-numeric:tabular-nums;color:var(--ink-2);font-size:.875rem}
+.entry .what{overflow-wrap:anywhere}
+.entry .what .sub{display:block;font-size:.875rem;color:var(--ink-2)}
+
+/* Toast */
+.toast{position:fixed;left:50%;bottom:calc(76px + env(safe-area-inset-bottom));z-index:40;transform:translate(-50%,8px);display:flex;align-items:center;gap:1rem;max-width:calc(100% - 32px);width:max-content;background:var(--ink);color:#fff;border:2px solid #000;border-radius:var(--r-sm);padding:.5rem .5rem .5rem 1rem;box-shadow:0 4px 0 rgba(0,0,0,.4);opacity:0;pointer-events:none;transition:opacity 200ms var(--ease-out),transform 200ms var(--ease-out)}
+.toast.show{opacity:1;transform:translate(-50%,0);pointer-events:auto}
+.toast button{font:700 1rem var(--font-body);color:var(--gold);background:transparent;border:0;min-height:44px;padding:0 .75rem;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+.toast button[hidden]{display:none}
+@media (min-width:768px){.toast{bottom:24px}}
+
+/* Dialog */
+dialog{border:2px solid var(--line);border-radius:var(--r-md);padding:0;width:calc(100% - 32px);max-width:360px;background:var(--surface);color:var(--ink);box-shadow:0 6px 0 rgba(0,0,0,.4)}
+dialog::backdrop{background:rgba(8,14,20,.65)}
+.dlg-body{padding:1.5rem;display:grid;gap:1rem;justify-items:center;text-align:center}
+.dlg-stage{padding:1rem 2rem .5rem;background-color:#d8cdb4;background-image:repeating-conic-gradient(#cfc2a6 0 25%,#d8cdb4 0 50%);background-size:24px 24px;border:2px solid var(--line);border-radius:var(--r-sm)}
+.dlg-stage canvas{width:96px;height:162px;display:block}
+.dlg-body p{margin:0}
+.dlg-actions{display:grid;gap:.5rem;width:100%}
+
+footer.foot{max-width:1200px;margin:0 auto;padding:0 1rem 1.5rem;color:#b9c6d2;font-size:.875rem;display:flex;flex-wrap:wrap;gap:.25rem 1rem;justify-content:space-between}
+@media (max-width:767px){footer.foot{padding-bottom:calc(88px + env(safe-area-inset-bottom))}}
+
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{transition:none !important;animation:none !important}
+}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <img class="ico" id="brandIco" alt="" width="30" height="36">
+    <h1>Mall Beer Counter</h1>
+  </div>
+  <div class="me">
+    <span class="total-chip"><b class="num" id="hdrTotal">0</b> <span id="hdrTotalLbl">drinks</span></span>
+    <canvas class="px" id="hdrAvatar" width="32" height="54" role="img" aria-label="Your character"></canvas>
+  </div>
+</header>
+
+<nav class="tabs" aria-label="Sections">
+  <a href="#map" data-tab="map">Map</a>
+  <a href="#wardrobe" data-tab="wardrobe">Wardrobe</a>
+  <a href="#rewards" data-tab="rewards">Rewards</a>
+  <a href="#history" data-tab="history">History</a>
+</nav>
+
+<main id="main">
+  <!-- MAP -->
+  <section class="view" id="view-map" aria-labelledby="mapTitle">
+    <h2 class="sr-only" id="mapTitle">Map</h2>
+    <div class="stats" id="stats"></div>
+    <div class="mapgrid">
+      <div class="win">
+        <div class="win-title"><span>Mall floor</span><small id="mapSub">4 spots</small></div>
+        <div class="mapwrap" id="mapwrap">
+          <canvas id="map" class="px" aria-label="Mall floor map. Use the spot list to select spots with a keyboard."></canvas>
+          <div class="pins" id="pins" aria-hidden="true"></div>
+        </div>
+        <p class="maphint" id="maphint">Tap a spot to select it, or tap empty floor to add a new one.</p>
+      </div>
+      <div class="side">
+        <div class="win" id="spotPanel"></div>
+        <div class="win" id="nextPanel"></div>
+        <div class="win">
+          <div class="win-body">
+            <div class="listhead"><h3>All spots</h3><button class="btn" type="button" data-action="add-spot-auto">Add a spot</button></div>
+            <ul class="list" id="spotList"></ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- WARDROBE -->
+  <section class="view" id="view-wardrobe" hidden aria-labelledby="wardTitle">
+    <div class="ward">
+      <div class="win">
+        <div class="win-title"><span id="wardTitle">Wardrobe</span><small id="wardCount"></small></div>
+        <div class="stage"><canvas class="px" id="bigAvatar" width="32" height="54" role="img" aria-label="Preview of your character"></canvas></div>
+      </div>
+      <div class="win">
+        <div class="win-body" id="wardOpts"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- REWARDS -->
+  <section class="view" id="view-rewards" hidden aria-labelledby="rewTitle">
+    <div class="win">
+      <div class="win-title"><span id="rewTitle">Rewards</span><small id="rewCount"></small></div>
+      <div class="win-body">
+        <p style="margin:0;max-width:60ch">Every milestone unlocks something to wear. Every drink you log counts, alcohol-free ones included, and one reward is just for pop, water or non-alcoholic drinks.</p>
+        <div class="bar" aria-hidden="true"><i id="rewBar" style="width:0"></i></div>
+      </div>
+    </div>
+    <div class="rewards" id="rewardList"></div>
+  </section>
+
+  <!-- HISTORY -->
+  <section class="view" id="view-history" hidden aria-labelledby="histTitle">
+    <div class="win">
+      <div class="win-title"><span id="histTitle">History</span><small id="histCount"></small></div>
+      <div class="win-body" id="histBody"></div>
+    </div>
+  </section>
+</main>
+
+<footer class="foot">
+  <span id="syncStatus">Saved on this device</span>
+  <span>Pace yourself and get home safe.</span>
+</footer>
+
+<div class="toast" id="toast" role="status" aria-live="polite">
+  <span id="toastMsg"></span>
+  <button type="button" id="toastUndo" hidden>Undo</button>
+</div>
+
+<dialog id="unlockDlg" aria-labelledby="dlgTitle">
+  <div class="win-title"><span>Reward unlocked</span></div>
+  <div class="dlg-body">
+    <div class="dlg-stage"><canvas class="px" id="dlgAvatar" width="32" height="54" role="img" aria-label="Your character wearing the new item"></canvas></div>
+    <h2 id="dlgTitle">Party hat</h2>
+    <p id="dlgText"></p>
+    <div class="dlg-actions">
+      <button class="btn btn-primary btn-block" type="button" id="dlgWear">Wear it now</button>
+      <button class="btn btn-block" type="button" id="dlgLater">Not now</button>
+    </div>
+  </div>
+</dialog>
+
+<script>
+(function(){
+"use strict";
+
+/* ---------- Data ---------- */
+const N = 8, TW = 64, TH = 32, WH = 72;
+const LW = N*TW + 32, ORX = LW/2, ORY = WH + 32, LH = ORY + N*TH + 40;
+
+const SKINS = ["#f6d3b3","#e2a97c","#b8774a","#7a4a2c"];
+const HAIRS = ["#2a1d16","#7a4b22","#e3b343","#c24a2b","#d4d6de"];
+const HAIR_NAMES = ["Black","Brown","Blond","Red","Silver"];
+const SKIN_NAMES = ["Light","Medium light","Medium dark","Dark"];
+const TEES = ["#3a7ca5","#4f9d5b","#c94f4f","#7d5ba6"];
+const TEE_NAMES = ["Blue","Green","Red","Purple"];
+const STYLES = ["Short","Spiky","Long"];
+const SPOT_COLORS = ["#e07a3f","#3a7ca5","#8e5bc4","#2f8a4a","#d1495b","#c99a1a"];
+const STORE_COLORS = ["#d9534f","#f0ad4e","#5bc0de","#5cb85c","#9b6fd1","#e8789b","#3a7ca5","#f2c230"];
+
+const TYPES = {
+  beer:{label:"Beer", alc:true, sizes:[["Can",355],["Pint",473],["Tall",568],["Pitcher",1890]], def:1},
+  wine:{label:"Wine", alc:true, sizes:[["Small glass",150],["Large glass",250],["Bottle",750]], def:0},
+  cider:{label:"Cider", alc:true, sizes:[["Can",355],["Pint",473],["Tall",568]], def:0},
+  cocktail:{label:"Cocktail", alc:true, sizes:[["Regular",180],["Large",300],["Pitcher",1000]], def:0},
+  spirits:{label:"Spirits", alc:true, sizes:[["Shot",44],["Double",88]], def:0},
+  na:{label:"Non-alc", full:"Non-alcoholic", alc:false, sizes:[["Can",355],["Pint",473],["Tall",568]], def:0},
+  pop:{label:"Pop", alc:false, sizes:[["Can",355],["Small cup",473],["Large cup",946]], def:0},
+  water:{label:"Water", alc:false, sizes:[["Glass",250],["Bottle",500]], def:1}
+};
+const typeName = k => TYPES[k].full || TYPES[k].label;
+const fmtMl = ml => ml >= 1000 ? (ml/1000).toFixed(ml%1000 ? 2 : 0).replace(/0$/,"") + " L" : ml + " ml";
+function sizeOf(e){ const t = TYPES[e.type]; const s = t.sizes[e.size != null ? e.size : t.def] || t.sizes[t.def]; return s; }
+
+const ITEMS = {
+  partyhat:{slot:"hat",name:"Party hat"},
+  hydrocap:{slot:"hat",name:"Hydro cap"},
+  crown:{slot:"hat",name:"Mall crown"},
+  shades:{slot:"face",name:"Pixel shades"},
+  foamstache:{slot:"face",name:"Foam moustache"},
+  blower:{slot:"face",name:"Party blower"},
+  hoodie:{slot:"top",name:"Mall-rat hoodie"},
+  bellhop:{slot:"top",name:"Bellhop jacket"},
+  bowling:{slot:"top",name:"Bowling shirt"},
+  pretzel:{slot:"held",name:"Pretzel"},
+  foamfinger:{slot:"held",name:"Foam finger"},
+  tankard:{slot:"held",name:"Gold tankard"}
+};
+const SLOTS = [["hat","Hats"],["face","Face"],["top","Tops"],["held","In hand"]];
+
+const REWARDS = [
+  {id:"r1", item:"partyhat", title:"First round", desc:"Log your first drink", metric:"total", target:1},
+  {id:"r2", item:"hydrocap", title:"Easy does it", desc:"Log 3 alcohol-free drinks", metric:"alcFree", target:3},
+  {id:"r12", item:"blower", title:"Good company", desc:"Tag friends on 5 drinks", metric:"tagged", target:5},
+  {id:"r3", item:"pretzel", title:"Mapmaker", desc:"Add your own spot to the map", metric:"custom", target:1},
+  {id:"r4", item:"shades", title:"Getting going", desc:"Log 5 drinks", metric:"total", target:5},
+  {id:"r5", item:"hoodie", title:"Mall crawler", desc:"Have a drink at 3 different spots", metric:"spots", target:3},
+  {id:"r6", item:"foamstache", title:"Repeat visitor", desc:"Log drinks on 3 different days", metric:"days", target:3},
+  {id:"r7", item:"foamfinger", title:"Double digits", desc:"Log 10 drinks", metric:"total", target:10},
+  {id:"r8", item:"bellhop", title:"Regular", desc:"Log 10 drinks at one spot", metric:"maxSpot", target:10},
+  {id:"r9", item:"tankard", title:"Quarter century", desc:"Log 25 drinks", metric:"total", target:25},
+  {id:"r10", item:"bowling", title:"League night", desc:"Log 50 drinks", metric:"total", target:50},
+  {id:"r11", item:"crown", title:"Mall royalty", desc:"Log 100 drinks", metric:"total", target:100}
+];
+
+const BLOCKED = new Set(["3,3","4,3","3,4","4,4","0,7","7,0","7,7"]);
+const LS_KEY = "mbc-state-v1";
+
+function defaultState(){
+  return {
+    v:1, updatedAt:0,
+    look:{skin:0, hairStyle:0, hairColor:1, tee:0},
+    equipped:{hat:null, face:null, top:null, held:null},
+    spots:[
+      {id:"taphouse", name:"Taphouse", tx:1, ty:1, color:"#e07a3f"},
+      {id:"cinema", name:"Cinema Lounge", tx:6, ty:2, color:"#8e5bc4"},
+      {id:"patio", name:"Patio Bar", tx:1, ty:5, color:"#2f8a4a"},
+      {id:"foodcourt", name:"Food Court", tx:5, ty:5, color:"#3a7ca5"}
+    ],
+    friends:[], log:[], announced:[]
+  };
+}
+function sanitize(s){
+  const d = defaultState();
+  if(!s || typeof s !== "object") return d;
+  return {
+    v:1, updatedAt: +s.updatedAt || 0,
+    look: Object.assign(d.look, s.look||{}),
+    equipped: Object.assign(d.equipped, s.equipped||{}),
+    spots: Array.isArray(s.spots) ? s.spots.filter(p=>p && p.id && p.name) : d.spots,
+    friends: Array.isArray(s.friends) ? s.friends.filter(f=>f && f.id && f.name) : [],
+    log: Array.isArray(s.log) ? s.log.filter(e=>e && e.id && e.spotId && TYPES[e.type]).map(e=>Object.assign({friends:[]}, e)) : [],
+    announced: Array.isArray(s.announced) ? s.announced : []
+  };
+}
+function loadLocal(){ try{ const raw = localStorage.getItem(LS_KEY); return raw ? sanitize(JSON.parse(raw)) : null; }catch(e){ return null; } }
+
+let S = loadLocal() || defaultState();
+const UI = { selected: (S.spots[0]||{}).id || null, type:"beer", sizes:{}, with:new Set(), addingFriend:false, managingFriends:false, pending:null, renaming:false, hover:null, tab:"map" };
+const curSize = () => UI.sizes[UI.type] != null ? UI.sizes[UI.type] : TYPES[UI.type].def;
+const friendName = id => (S.friends.find(f => f.id === id) || {}).name;
+function withText(ids){
+  const names = (ids||[]).map(friendName).filter(Boolean);
+  if(!names.length) return "";
+  if(names.length === 1) return names[0];
+  return names.slice(0,-1).join(", ") + " and " + names[names.length-1];
+}
+
+/* ---------- Persistence ---------- */
+let remoteRef = null, remoteTimer = null, remoteBusy = false, remoteDirty = false;
+function save(){
+  S.updatedAt = Date.now();
+  try{ localStorage.setItem(LS_KEY, JSON.stringify(S)); }catch(e){}
+  if(remoteRef){ remoteDirty = true; clearTimeout(remoteTimer); remoteTimer = setTimeout(flushRemote, 700); }
+}
+async function flushRemote(){
+  if(!remoteRef || remoteBusy || !remoteDirty) return;
+  remoteBusy = true; remoteDirty = false;
+  try{
+    await remoteRef.set({updatedAt:S.updatedAt, state:JSON.parse(JSON.stringify(S))});
+    setSync("Saved to your account");
+  }catch(e){
+    setSync("Saved on this device. Account sync paused.");
+    if(e && e.code === "invalid_argument"){ remoteRef = null; }
+  }finally{
+    remoteBusy = false;
+    if(remoteDirty) setTimeout(flushRemote, 300);
+  }
+}
+function setSync(t){ document.getElementById("syncStatus").textContent = t; }
+async function initRemote(){
+  try{
+    if(!window.claude || typeof window.claude.use !== "function") return;
+    const db = await window.claude.use("db");
+    const user = await window.claude.use("user");
+    if(!db || !user) return;
+    const id = await user.id();
+    if(!id) return;
+    const ref = db.doc("data/users/" + id + "/state");
+    const snap = await ref.get();
+    remoteRef = ref;
+    if(snap.exists){
+      const body = snap.data() || {};
+      if(body.state && (+body.updatedAt||0) > (S.updatedAt||0)){
+        S = sanitize(JSON.parse(JSON.stringify(body.state)));
+        try{ localStorage.setItem(LS_KEY, JSON.stringify(S)); }catch(e){}
+        if(!S.spots.find(p=>p.id===UI.selected)) UI.selected = (S.spots[0]||{}).id || null;
+        renderAll();
+      } else if((S.updatedAt||0) > (+body.updatedAt||0)){ remoteDirty = true; flushRemote(); }
+    } else if(S.updatedAt){ remoteDirty = true; flushRemote(); }
+    setSync("Saved to your account");
+  }catch(e){ /* stays local */ }
+}
+
+/* ---------- Helpers ---------- */
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+function shade(hex, amt){
+  const n = parseInt(hex.slice(1),16); let r=n>>16, g=(n>>8)&255, b=n&255;
+  const f = v => Math.max(0, Math.min(255, Math.round(amt<0 ? v*(1+amt) : v + (255-v)*amt)));
+  return "#" + ((1<<24) + (f(r)<<16) + (f(g)<<8) + f(b)).toString(16).slice(1);
+}
+const dayKey = t => new Date(t).toDateString();
+const fmtTime = t => new Date(t).toLocaleTimeString([], {hour:"numeric", minute:"2-digit"});
+function dayLabel(t){
+  const k = dayKey(t), today = new Date();
+  if(k === today.toDateString()) return "Today";
+  const y = new Date(today); y.setDate(today.getDate()-1);
+  if(k === y.toDateString()) return "Yesterday";
+  return new Date(t).toLocaleDateString([], {weekday:"long", month:"short", day:"numeric"});
+}
+const plural = (n, one, many) => n === 1 ? one : many;
+const spotById = id => S.spots.find(p => p.id === id);
+
+function stats(){
+  const drinks = S.log;
+  const per = {}, freePer = {}, last = {};
+  drinks.forEach(e => {
+    per[e.spotId] = (per[e.spotId]||0) + 1;
+    if(!TYPES[e.type].alc) freePer[e.spotId] = (freePer[e.spotId]||0) + 1;
+    last[e.spotId] = Math.max(last[e.spotId]||0, e.t);
+  });
+  const todayK = new Date().toDateString();
+  return {
+    total: drinks.length,
+    alcFree: drinks.filter(e => !TYPES[e.type].alc).length,
+    tagged: drinks.filter(e => e.friends && e.friends.some(friendName)).length,
+    today: drinks.filter(e => dayKey(e.t) === todayK).length,
+    spots: Object.keys(per).length,
+    maxSpot: Math.max(0, ...Object.values(per)),
+    days: new Set(drinks.map(e => dayKey(e.t))).size,
+    custom: S.spots.filter(p => p.custom).length,
+    per, freePer, last
+  };
+}
+const progress = (st, r) => Math.min(st[r.metric], r.target);
+function unlockedItems(st){ st = st || stats(); const set = new Set(); REWARDS.forEach(r => { if(st[r.metric] >= r.target) set.add(r.item); }); return set; }
+function rewardFor(item){ return REWARDS.find(r => r.item === item); }
+function enforceEquipped(st){
+  const un = unlockedItems(st); let changed = false;
+  Object.keys(S.equipped).forEach(k => { if(S.equipped[k] && !un.has(S.equipped[k])){ S.equipped[k] = null; changed = true; } });
+  return changed;
+}
+
+/* ---------- Pixel sprites ---------- */
+function sprite(rows, pal){
+  const h = rows.length, w = Math.max(...rows.map(r => r.length));
+  const c = document.createElement("canvas"); c.width = w; c.height = h;
+  const x = c.getContext("2d");
+  rows.forEach((r,y) => [...r].forEach((ch,i) => { if(pal[ch]){ x.fillStyle = pal[ch]; x.fillRect(i,y,1,1); } }));
+  return c.toDataURL();
+}
+const O = "#141a22";
+const ICONS = {
+  beer: sprite(["..........",".wwwwww...","wwwwwwww..","oyyyyyyo..","oyyyyyyooo","oyyyyyyo.o","oyyyyyyo.o","oyyyyyyo.o","oyyyyyyooo","oyyyyyyo..","oooooooo..",".........."],{w:"#fffbe8",y:"#f2b630",o:O}),
+  wine: sprite(["..o....o..","..o....o..","..orrrro..","..orrrro..","...orro...","....oo....","....oo....","....oo....","....oo....","..oooooo..","..........",".........."],{r:"#9b2340",o:O}),
+  spirits: sprite(["..........","..........","..........","..o....o..","..o....o..","..oaaaao..","..oaaaao..","..oaaaao..","..oooooo..","..oooooo..","..........",".........."],{a:"#d9902b",o:O}),
+  na: sprite(["..........",".wwwwww...","wwwwwwww..","oyyyyyyo..","oyoooyyooo","oyoyoyyo.o","oyoyoyyo.o","oyoooyyo.o","oyyyyyyooo","oyyyyyyo..","oooooooo..",".........."],{w:"#fffbe8",y:"#b9dd7a",o:O}),
+  pop: sprite(["..........","...oooo...","..oggggo..","..orrrro..","..orwwro..","..orwwro..","..orrrro..","..orwwro..","..orrrro..","..oggggo..","...oooo...",".........."],{r:"#d23b3b",w:"#ffffff",g:"#c5ccd3",o:O}),
+  cider: sprite(["..........","..o.....o.","..owwwwwo.","..ogggggo.","..ogggggo.","..ogggggo.","..ogggggo.","..ogggggo.","..ogggggo.","..ooooooo.","..........",".........."],{w:"#fffbe8",g:"#c9b23a",o:O}),
+  cocktail: sprite(["o........o","oppppppppo",".oppppppo.","..oppppo..","...oppo...","....oo....","....oo....","....oo....","....oo....","..oooooo..","..........",".........."],{p:"#e5568a",o:O}),
+  water: sprite(["..........","..o....o..","..o....o..","..obbbbo..","..obbbbo..","..obbbbo..","..obbbbo..","..obbbbo..","..obbbbo..","..oooooo..","..........",".........."],{b:"#6cc4ea",o:O}),
+  lock: sprite(["..........","...oooo...","..o....o..","..o....o..",".oooooooo.",".oyyyyyyo.",".oyyooyyo.",".oyyooyyo.",".oyyyyyyo.",".oooooooo.","..........",".........."],{y:"#f2c230",o:O}),
+  trash: sprite(["...oooo...","oooooooooo","..........",".oooooooo.",".oggggggo.",".ogogogog.",".ogogogog.",".ogogogog.",".ogogogog.",".oggggggo.","..oooooo..",".........."],{g:"#c5ccd3",o:O}),
+  check: sprite(["..........","........oo",".......oo.","oo....oo..",".oo..oo...","..oooo....","...oo.....",".........."],{o:"#1d5c30"})
+};
+const icon = (k, cls="ico") => `<img class="${cls}" src="${ICONS[k]}" alt="" width="20" height="24">`;
+
+/* ---------- Avatar ---------- */
+const AW = 32, AH = 54, OX = 2, OY = 8;
+const avatarCache = new Map();
+function avatarCanvas(look, eq){
+  const key = JSON.stringify([look, eq]);
+  if(avatarCache.has(key)) return avatarCache.get(key);
+  const buf = new Array(AW*AH).fill(null);
+  const R = (x,y,w,h,c) => { for(let j=0;j<h;j++) for(let i=0;i<w;i++){ const X=x+i+OX, Y=y+j+OY; if(X>=0&&X<AW&&Y>=0&&Y<AH) buf[Y*AW+X]=c; } };
+  const C = (x,y) => { const X=x+OX, Y=y+OY; buf[Y*AW+X]=null; };
+  const skin = SKINS[look.skin]||SKINS[0], skinDk = shade(skin,-.15), hair = HAIRS[look.hairColor]||HAIRS[0];
+  let shirt = TEES[look.tee]||TEES[0], long = false;
+  if(eq.top==="hoodie"){ shirt="#5d6b78"; long=true; }
+  if(eq.top==="bellhop"){ shirt="#b8322e"; long=true; }
+  if(eq.top==="bowling"){ shirt="#2b8c8c"; }
+  const pants="#2e3a59", shoe="#1e1e24", gold="#e8b84a";
+  // legs
+  R(9,31,4,8,pants); R(15,31,4,8,pants); R(13,31,2,2,pants); R(16,31,2,8,shade(pants,-.2));
+  R(8,39,5,2,shoe); R(15,39,5,2,shoe);
+  // arms
+  if(long){ R(5,19,3,8,shirt); R(20,19,3,8,shirt); }
+  else { R(5,19,3,4,shirt); R(20,19,3,4,shirt); R(5,23,3,4,skin); R(20,23,3,4,skin); }
+  R(5,27,3,2,skin); R(20,27,3,2,skin);
+  // torso
+  R(8,18,12,13,shirt); R(18,18,2,13,shade(shirt,-.18)); R(8,30,12,1,shade(pants,-.3));
+  if(eq.top==="bowling"){ R(10,18,2,12,"#f1e6c8"); R(16,18,2,12,"#f1e6c8"); R(11,18,6,1,"#f1e6c8"); }
+  else if(eq.top==="hoodie"){ R(10,17,8,2,shade(shirt,-.12)); R(11,25,6,3,shade(shirt,-.15)); R(12,19,1,3,"#e6e6e6"); R(15,19,1,3,"#e6e6e6"); }
+  else if(eq.top==="bellhop"){ R(11,18,6,1,gold); R(13,21,2,1,gold); R(13,24,2,1,gold); R(13,27,2,1,gold); R(5,26,3,1,gold); R(20,26,3,1,gold); }
+  else { R(12,18,4,1,skinDk); }
+  // neck + head
+  R(12,16,4,2,skinDk);
+  R(8,6,12,10,skin); C(8,6); C(19,6); C(8,15); C(19,15);
+  R(7,10,1,2,skin); R(20,10,1,2,skin);
+  R(11,10,1,2,"#1b1f2a"); R(16,10,1,2,"#1b1f2a"); R(13,13,2,1,"#9c4a3c");
+  R(10,12,1,1,shade(skin,-.08)); R(17,12,1,1,shade(skin,-.08));
+  // hair
+  if(look.hairStyle===2){ R(8,4,12,3,hair); R(7,6,2,12,hair); R(19,6,2,12,hair); R(10,7,8,1,hair); }
+  else { R(8,4,12,3,hair); R(8,7,2,2,hair); R(18,7,2,2,hair); R(10,7,4,1,hair);
+    if(look.hairStyle===1){ R(9,3,2,1,hair); R(13,2,2,2,hair); R(17,3,2,1,hair); R(11,3,1,1,hair); } }
+  // face items
+  if(eq.face==="shades"){ R(9,9,10,3,"#15151b"); R(10,9,2,1,"#6f8fa8"); R(15,9,2,1,"#6f8fa8"); }
+  if(eq.face==="foamstache"){ R(11,12,6,1,"#f6f0dc"); R(10,13,2,1,"#f6f0dc"); R(16,13,2,1,"#f6f0dc"); }
+  if(eq.face==="blower"){ R(14,13,7,1,"#e5568a"); R(16,13,1,1,"#f2c230"); R(19,13,1,1,"#f2c230"); R(21,12,2,3,"#f2c230"); }
+  // hats
+  if(eq.hat==="partyhat"){
+    const ws=[2,2,4,4,6,8,10];
+    ws.forEach((w,r)=>R(14-w/2,-3+r,w,1,r%2?"#e5568a":"#f2c230"));
+    R(13,-4,2,1,"#ffffff");
+  }
+  if(eq.hat==="hydrocap"){ R(9,1,10,1,"#2f7de1"); R(8,2,12,4,"#2f7de1"); R(17,2,2,4,"#2768c0"); R(7,6,14,1,"#1f5fb3"); R(13,3,2,2,"#ffffff"); }
+  if(eq.hat==="crown"){ R(9,1,10,3,"#f2c230"); R(9,-1,2,2,"#f2c230"); R(13,-2,2,3,"#f2c230"); R(17,-1,2,2,"#f2c230"); R(9,3,10,1,"#c99a1a"); R(13,2,2,1,"#d23b3b"); R(10,2,1,1,"#3b7bd2"); R(17,2,1,1,"#3b7bd2"); }
+  // held
+  if(eq.held==="tankard"){ R(21,23,5,7,"#e9b730"); R(21,25,5,1,"#b88a0e"); R(21,21,5,2,"#fbf6e3"); R(22,20,2,1,"#fbf6e3"); R(26,24,2,1,"#b88a0e"); R(27,24,1,4,"#b88a0e"); R(26,27,2,1,"#b88a0e"); R(20,26,2,2,skin); }
+  if(eq.held==="foamfinger"){ R(20,19,6,7,"#2f7de1"); R(22,12,2,7,"#2f7de1"); R(21,22,4,1,"#ffffff"); R(24,19,2,7,"#2768c0"); }
+  if(eq.held==="pretzel"){ const c="#b5682a"; R(21,25,6,1,c); R(20,26,1,3,c); R(27,26,1,3,c); R(21,29,6,1,c); R(23,26,2,3,c); R(22,25,1,1,"#ffffff"); R(25,29,1,1,"#ffffff"); R(26,25,1,1,"#ffffff"); }
+  // outline
+  const out = buf.slice();
+  for(let y=0;y<AH;y++) for(let x=0;x<AW;x++){
+    if(buf[y*AW+x]) continue;
+    const n = (x>0&&buf[y*AW+x-1])||(x<AW-1&&buf[y*AW+x+1])||(y>0&&buf[(y-1)*AW+x])||(y<AH-1&&buf[(y+1)*AW+x]);
+    if(n) out[y*AW+x] = O;
+  }
+  const c = document.createElement("canvas"); c.width = AW; c.height = AH;
+  const g = c.getContext("2d");
+  out.forEach((col,i) => { if(col){ g.fillStyle = col; g.fillRect(i%AW, (i/AW)|0, 1, 1); } });
+  avatarCache.set(key, c);
+  return c;
+}
+function paintAvatar(target, look, eq){
+  const src = avatarCanvas(look, eq);
+  target.width = AW; target.height = AH;
+  const g = target.getContext("2d"); g.imageSmoothingEnabled = false;
+  g.clearRect(0,0,AW,AH); g.drawImage(src,0,0);
+}
+function withItem(item){ const eq = Object.assign({}, S.equipped); eq[ITEMS[item].slot] = item; return eq; }
+function itemOnly(item){ const eq = {hat:null,face:null,top:null,held:null}; eq[ITEMS[item].slot] = item; return eq; }
+
+/* ---------- Map ---------- */
+const mapC = $("map"), mctx = mapC.getContext("2d");
+const tileTop = (tx,ty) => ({x: ORX + (tx-ty)*TW/2, y: ORY + (tx+ty)*TH/2});
+function poly(pts, fill, stroke, lw){
+  mctx.beginPath(); mctx.moveTo(pts[0][0], pts[0][1]);
+  for(let i=1;i<pts.length;i++) mctx.lineTo(pts[i][0], pts[i][1]);
+  mctx.closePath();
+  if(fill){ mctx.fillStyle = fill; mctx.fill(); }
+  if(stroke){ mctx.strokeStyle = stroke; mctx.lineWidth = lw||1; mctx.stroke(); }
+}
+function diamond(tx,ty){ const p = tileTop(tx,ty); return [[p.x,p.y],[p.x+TW/2,p.y+TH/2],[p.x,p.y+TH],[p.x-TW/2,p.y+TH/2]]; }
+function wallPt(A,B,f,h){ return [A.x+(B.x-A.x)*f, A.y+(B.y-A.y)*f-h]; }
+function drawWalls(){
+  for(let side=0; side<2; side++){
+    for(let k=0;k<N;k++){
+      const A = side ? tileTop(0,k) : tileTop(k,0);
+      const B = side ? tileTop(0,k+1) : tileTop(k+1,0);
+      const face = side ? "#e9e3d4" : "#d6cfbd";
+      poly([[A.x,A.y],[B.x,B.y],[B.x,B.y-WH],[A.x,A.y-WH]], face);
+      // trim
+      poly([wallPt(A,B,0,0),wallPt(A,B,1,0),wallPt(A,B,1,6),wallPt(A,B,0,6)], "#7f8c99");
+      // storefront
+      const col = STORE_COLORS[(k + side*3) % STORE_COLORS.length];
+      poly([wallPt(A,B,.12,8),wallPt(A,B,.88,8),wallPt(A,B,.88,46),wallPt(A,B,.12,46)], "#9fd3e6", O, 1);
+      poly([wallPt(A,B,.2,14),wallPt(A,B,.34,14),wallPt(A,B,.5,40),wallPt(A,B,.36,40)], "rgba(255,255,255,.45)");
+      for(let s=0;s<4;s++){
+        const f0 = .1 + s*.2, f1 = f0 + .2;
+        poly([wallPt(A,B,f0,46),wallPt(A,B,f1,46),wallPt(A,B,f1,56),wallPt(A,B,f0,56)], s%2 ? "#ffffff" : col);
+      }
+      poly([wallPt(A,B,.1,46),wallPt(A,B,.9,46),wallPt(A,B,.9,56),wallPt(A,B,.1,56)], null, O, 1);
+      poly([wallPt(A,B,0,WH),wallPt(A,B,1,WH),wallPt(A,B,1,WH+4),wallPt(A,B,0,WH+4)], "#5b6875");
+    }
+  }
+}
+function isoBox(cx, cy, hw, hh, h, top, left, right){
+  poly([[cx-hw,cy],[cx,cy+hh],[cx,cy+hh-h],[cx-hw,cy-h]], left, O, 1);
+  poly([[cx,cy+hh],[cx+hw,cy],[cx+hw,cy-h],[cx,cy+hh-h]], right, O, 1);
+  poly([[cx,cy-hh-h],[cx+hw,cy-h],[cx,cy+hh-h],[cx-hw,cy-h]], top, O, 1);
+}
+function drawPlanter(tx,ty){
+  const p = tileTop(tx,ty), cx = p.x, cy = p.y + TH/2;
+  isoBox(cx, cy, 20, 10, 14, "#6b4a2b", "#8a6a48", "#6f5236");
+  const leaves = [[-10,-22,10],[0,-30,12],[8,-22,10],[-4,-38,9],[6,-36,8]];
+  leaves.forEach(([dx,dy,s],i) => { mctx.fillStyle = i%2 ? "#3f8f4a" : "#2f7a3b"; mctx.fillRect(cx+dx-s/2, cy+dy-s/2, s, s); mctx.strokeStyle=O; mctx.lineWidth=1; mctx.strokeRect(cx+dx-s/2+.5, cy+dy-s/2+.5, s-1, s-1); });
+}
+function drawFountain(){
+  const a = tileTop(3,3), cx = a.x, cy = a.y + TH;
+  isoBox(cx, cy, 56, 28, 12, "#b9c2cb", "#9aa4ae", "#87919b");
+  poly([[cx,cy-12-20],[cx+44,cy-12],[cx,cy-12+20],[cx-44,cy-12]], "#5fb6dd");
+  poly([[cx,cy-12-12],[cx+24,cy-12],[cx,cy-12+12],[cx-24,cy-12]], "#7fcbe9");
+  mctx.fillStyle = "#b9c2cb"; mctx.fillRect(cx-4, cy-40, 8, 28); mctx.strokeStyle = O; mctx.strokeRect(cx-3.5, cy-39.5, 7, 27);
+  mctx.fillStyle = "#e9f7fd"; mctx.fillRect(cx-2, cy-52, 4, 12); mctx.fillRect(cx-8, cy-46, 4, 4); mctx.fillRect(cx+4, cy-46, 4, 4);
+}
+function drawSign(sp, st){
+  const p = tileTop(sp.tx, sp.ty), cx = p.x, by = p.y + 10;
+  mctx.fillStyle = "#3a434d"; mctx.fillRect(cx-2, by-26, 4, 26);
+  const w = 30, h = 18;
+  mctx.fillStyle = sp.color; mctx.fillRect(cx-w/2, by-26-h, w, h);
+  mctx.strokeStyle = O; mctx.lineWidth = 2; mctx.strokeRect(cx-w/2, by-26-h, w, h);
+  // tiny mug
+  mctx.fillStyle = "#fffbe8"; mctx.fillRect(cx-6, by-40, 9, 3);
+  mctx.fillStyle = "#f2b630"; mctx.fillRect(cx-6, by-37, 9, 8);
+  mctx.fillStyle = "#fffbe8"; mctx.fillRect(cx+3, by-36, 3, 2); mctx.fillRect(cx+5, by-34, 1, 3); mctx.fillRect(cx+3, by-31, 3, 1);
+}
+function drawMap(){
+  const dpr = Math.min(window.devicePixelRatio||1, 3);
+  if(mapC.width !== LW*dpr){ mapC.width = LW*dpr; mapC.height = LH*dpr; }
+  mctx.setTransform(dpr,0,0,dpr,0,0);
+  mctx.imageSmoothingEnabled = false;
+  mctx.clearRect(0,0,LW,LH);
+  const st = stats();
+  drawWalls();
+  // floor slab edges
+  const L = tileTop(0,N), Rt = tileTop(N,0), Bt = tileTop(N,N);
+  poly([[L.x,L.y],[Bt.x,Bt.y],[Bt.x,Bt.y+10],[L.x,L.y+10]], "#9c8f74", O, 1);
+  poly([[Bt.x,Bt.y],[Rt.x,Rt.y],[Rt.x,Rt.y+10],[Bt.x,Bt.y+10]], "#857a62", O, 1);
+  for(let ty=0;ty<N;ty++) for(let tx=0;tx<N;tx++){
+    poly(diamond(tx,ty), (tx+ty)%2 ? "#cfc2a6" : "#d8cdb4", "rgba(0,0,0,.08)");
+  }
+  S.spots.forEach(sp => { poly(diamond(sp.tx,sp.ty), sp.color + "88"); });
+  if(UI.hover && !BLOCKED.has(UI.hover.join(","))) poly(diamond(UI.hover[0],UI.hover[1]), "rgba(255,255,255,.35)");
+  if(UI.pending){ poly(diamond(UI.pending.tx,UI.pending.ty), "rgba(242,194,48,.45)"); mctx.setLineDash([4,3]); poly(diamond(UI.pending.tx,UI.pending.ty), null, O, 2); mctx.setLineDash([]); }
+  const sel = spotById(UI.selected);
+  if(sel && !UI.pending) poly(diamond(sel.tx,sel.ty), null, "#f2c230", 3);
+  // objects in depth order
+  const objs = [];
+  [[0,7],[7,0],[7,7]].forEach(([x,y]) => objs.push({d:x+y, f:()=>drawPlanter(x,y)}));
+  objs.push({d:7.5, f:drawFountain});
+  S.spots.forEach(sp => objs.push({d:sp.tx+sp.ty, f:()=>drawSign(sp, st)}));
+  const at = UI.pending ? UI.pending : sel;
+  if(at){
+    objs.push({d:at.tx+at.ty+.5, f:()=>{
+      const p = tileTop(at.tx, at.ty), fx = p.x + 8, fy = p.y + 24;
+      mctx.fillStyle = "rgba(0,0,0,.22)"; mctx.beginPath(); mctx.ellipse(fx, fy, 11, 5, 0, 0, Math.PI*2); mctx.fill();
+      mctx.drawImage(avatarCanvas(S.look, S.equipped), fx-16, fy-49);
+    }});
+  }
+  objs.sort((a,b) => a.d - b.d).forEach(o => o.f());
+  // pins
+  const pins = $("pins");
+  pins.innerHTML = S.spots.map(sp => {
+    const p = tileTop(sp.tx, sp.ty), n = st.per[sp.id]||0;
+    return `<div class="pin${sp.id===UI.selected && !UI.pending ? " sel":""}" style="left:${(p.x/LW*100).toFixed(2)}%;top:${((p.y-20)/LH*100).toFixed(2)}%"><span>${esc(sp.name)}</span><b>${n}</b></div>`;
+  }).join("");
+}
+function tileAt(ev){
+  const r = mapC.getBoundingClientRect();
+  const lx = (ev.clientX - r.left) * LW / r.width, ly = (ev.clientY - r.top) * LH / r.height;
+  const a = (ly - ORY) / (TH/2), b = (lx - ORX) / (TW/2);
+  const tx = Math.floor((a+b)/2), ty = Math.floor((a-b)/2);
+  if(tx<0||ty<0||tx>=N||ty>=N) return null;
+  return [tx,ty];
+}
+mapC.addEventListener("pointermove", e => {
+  if(e.pointerType !== "mouse") return;
+  const t = tileAt(e); const k = t ? t.join(",") : null;
+  if(k !== (UI.hover ? UI.hover.join(",") : null)){ UI.hover = t; drawMap(); }
+});
+mapC.addEventListener("pointerleave", () => { if(UI.hover){ UI.hover = null; drawMap(); } });
+mapC.addEventListener("click", e => {
+  const t = tileAt(e); if(!t) return;
+  const [tx,ty] = t;
+  const sp = S.spots.find(p => p.tx===tx && p.ty===ty);
+  if(sp){ selectSpot(sp.id); return; }
+  if(BLOCKED.has(tx+","+ty)){ toast(tx===3||tx===4 ? "That's the fountain. Pick an open floor tile." : "That's a planter. Pick an open floor tile."); return; }
+  UI.pending = {tx,ty}; UI.renaming = false;
+  renderMapView();
+  const inp = $("newName"); if(inp) inp.focus();
+});
+
+/* ---------- Actions ---------- */
+function selectSpot(id){ UI.selected = id; UI.pending = null; UI.renaming = false; renderMapView(); }
+function freeTile(){
+  const taken = new Set(S.spots.map(p => p.tx+","+p.ty));
+  const order = [];
+  for(let ty=0;ty<N;ty++) for(let tx=0;tx<N;tx++) order.push([tx,ty]);
+  order.sort((a,b) => (Math.abs(a[0]-3.5)+Math.abs(a[1]-3.5)) - (Math.abs(b[0]-3.5)+Math.abs(b[1]-3.5)));
+  return order.find(([x,y]) => !taken.has(x+","+y) && !BLOCKED.has(x+","+y));
+}
+function logDrink(spotId, type){
+  const before = stats();
+  const friends = [...UI.with].filter(friendName);
+  const e = {id:uid(), spotId, type, size:curSize(), friends, t:Date.now()};
+  S.log.push(e); save();
+  const sp = spotById(spotId);
+  renderAll();
+  const label = typeName(type);
+  const w = withText(friends);
+  toast(`${sizeOf(e)[0]} of ${label.toLowerCase()} logged at ${sp ? sp.name : "this spot"}${w ? " with " + w : ""}.`, () => { S.log = S.log.filter(x => x.id !== e.id); enforceEquipped(); save(); renderAll(); toast(`${label} removed.`); });
+  checkUnlocks(before);
+}
+function checkUnlocks(){
+  const st = stats();
+  const fresh = REWARDS.filter(r => st[r.metric] >= r.target && !S.announced.includes(r.id));
+  if(!fresh.length) return;
+  fresh.forEach(r => S.announced.push(r.id)); save();
+  showUnlock(fresh[fresh.length-1], fresh.length);
+}
+function removeEntry(id){
+  const idx = S.log.findIndex(e => e.id === id); if(idx < 0) return;
+  const [e] = S.log.splice(idx, 1);
+  enforceEquipped(); save(); renderAll();
+  const sp = spotById(e.spotId);
+  toast(`Removed ${typeName(e.type).toLowerCase()} at ${sp ? sp.name : "a removed spot"}.`, () => { S.log.splice(idx, 0, e); save(); renderAll(); toast("Entry restored."); });
+}
+function removeSpot(id){
+  const sp = spotById(id); if(!sp) return;
+  const spots = S.spots.slice(), log = S.log.slice(), eq = Object.assign({}, S.equipped);
+  const n = S.log.filter(e => e.spotId === id).length;
+  S.spots = S.spots.filter(p => p.id !== id);
+  S.log = S.log.filter(e => e.spotId !== id);
+  enforceEquipped();
+  UI.selected = (S.spots[0]||{}).id || null; UI.renaming = false;
+  save(); renderAll();
+  toast(`Removed ${sp.name}${n ? ` and ${n} ${plural(n,"entry","entries")}` : ""}.`, () => { S.spots = spots; S.log = log; S.equipped = eq; UI.selected = id; save(); renderAll(); toast(`${sp.name} is back.`); });
+}
+
+/* ---------- Toast ---------- */
+let toastTimer = null, undoFn = null;
+function toast(msg, undo){
+  $("toastMsg").textContent = msg;
+  undoFn = undo || null;
+  $("toastUndo").hidden = !undo;
+  $("toast").classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { $("toast").classList.remove("show"); undoFn = null; }, undo ? 6000 : 3500);
+}
+$("toastUndo").addEventListener("click", () => { const f = undoFn; undoFn = null; $("toast").classList.remove("show"); if(f) f(); });
+
+/* ---------- Unlock dialog ---------- */
+let dlgItem = null;
+function showUnlock(r, count){
+  dlgItem = r.item;
+  paintAvatar($("dlgAvatar"), S.look, withItem(r.item));
+  $("dlgTitle").textContent = ITEMS[r.item].name;
+  $("dlgText").textContent = `${r.title}: ${r.desc.charAt(0).toLowerCase() + r.desc.slice(1)}.` + (count > 1 ? ` You unlocked ${count} rewards at once. See them all in Rewards.` : "");
+  const d = $("unlockDlg");
+  try{ d.showModal(); }catch(e){ d.setAttribute("open",""); }
+  $("dlgWear").focus();
+}
+$("dlgWear").addEventListener("click", () => {
+  if(dlgItem){ S.equipped[ITEMS[dlgItem].slot] = dlgItem; save(); }
+  $("unlockDlg").close(); renderAll();
+  toast(`Wearing the ${ITEMS[dlgItem].name.toLowerCase()}.`);
+});
+$("dlgLater").addEventListener("click", () => $("unlockDlg").close());
+
+/* ---------- Render: map view ---------- */
+function renderHeader(st){
+  $("hdrTotal").textContent = st.total;
+  $("hdrTotalLbl").textContent = plural(st.total, "drink", "drinks");
+  paintAvatar($("hdrAvatar"), S.look, S.equipped);
+  $("brandIco").src = ICONS.beer;
+}
+function renderStats(st){
+  const top = S.spots.slice().sort((a,b) => (st.per[b.id]||0) - (st.per[a.id]||0))[0];
+  $("stats").innerHTML = [
+    [st.total, "Drinks logged"],
+    [st.today, "Drinks today"],
+    [st.spots, plural(st.spots, "Spot visited", "Spots visited")],
+    [st.alcFree, "Alcohol-free"]
+  ].map(([n,l]) => `<div class="win stat"><div class="big">${n}</div><div class="lbl">${l}</div></div>`).join("");
+}
+function renderSpotPanel(st){
+  const el = $("spotPanel");
+  if(UI.pending){
+    el.innerHTML = `<div class="win-title"><span>New spot</span><small>Tile ${UI.pending.tx+1}, ${UI.pending.ty+1}</small></div>
+      <form class="win-body" id="newSpotForm" novalidate>
+        <div class="field">
+          <label for="newName">Spot name</label>
+          <input id="newName" name="name" type="text" maxlength="28" autocomplete="off" placeholder="e.g. Arcade bar" aria-describedby="newNameErr">
+          <span class="err" id="newNameErr" hidden>Give this spot a name so you can find it later.</span>
+        </div>
+        <div class="row-actions">
+          <button class="btn btn-primary" type="submit">Add spot</button>
+          <button class="btn btn-ghost" type="button" data-action="cancel-new">Cancel</button>
+        </div>
+      </form>`;
+    const inp = $("newName");
+    inp.addEventListener("blur", () => { if(inp.value.trim() === "" && document.activeElement !== el.querySelector("[data-action=cancel-new]")) {} });
+    $("newSpotForm").addEventListener("submit", ev => {
+      ev.preventDefault();
+      const name = inp.value.trim();
+      if(!name){ inp.setAttribute("aria-invalid","true"); $("newNameErr").hidden = false; inp.focus(); return; }
+      const sp = {id:uid(), name, tx:UI.pending.tx, ty:UI.pending.ty, color:SPOT_COLORS[S.spots.length % SPOT_COLORS.length], custom:true};
+      S.spots.push(sp); UI.selected = sp.id; UI.pending = null; save(); renderAll();
+      toast(`${name} added to the map.`);
+      checkUnlocks();
+    });
+    inp.addEventListener("input", () => { if(inp.value.trim()){ inp.removeAttribute("aria-invalid"); $("newNameErr").hidden = true; } });
+    return;
+  }
+  const sp = spotById(UI.selected);
+  if(!sp){
+    el.innerHTML = `<div class="win-title"><span>No spot selected</span></div>
+      <div class="win-body"><div class="empty"><p>Tap any empty floor tile on the map to add the first place you had a drink.</p><button class="btn btn-primary" type="button" data-action="add-spot-auto">Add a spot</button></div></div>`;
+    return;
+  }
+  const n = st.per[sp.id]||0, w = st.freePer[sp.id]||0, last = st.last[sp.id];
+  const sizes = TYPES[UI.type].sizes, cs = curSize();
+  const friendChips = S.friends.map(f => UI.managingFriends
+      ? `<button class="fchip" type="button" data-action="remove-friend" data-id="${f.id}" aria-label="Remove ${esc(f.name)} from your friends">${esc(f.name)} <span aria-hidden="true">✕</span></button>`
+      : `<button class="fchip" type="button" data-action="toggle-friend" data-id="${f.id}" aria-pressed="${UI.with.has(f.id)}">${esc(f.name)}</button>`).join("");
+  const friendsBlock = `<div class="opt" role="group" aria-labelledby="withLbl">
+      <div class="listhead"><span id="withLbl" style="font-weight:500">Who's with you? <span class="muted" style="font-weight:400">(optional)</span></span>
+        ${S.friends.length ? `<button class="btn btn-ghost" type="button" data-action="manage-friends">${UI.managingFriends ? "Done" : "Edit friends"}</button>` : ""}</div>
+      <div class="fchips">${friendChips}
+        ${UI.managingFriends ? "" : (UI.addingFriend ? "" : `<button class="fchip add" type="button" data-action="add-friend">+ Add friend</button>`)}</div>
+      ${UI.addingFriend ? `<form id="friendForm" class="field" novalidate><label for="friendInp">Friend's name</label>
+        <div class="row-actions"><input id="friendInp" type="text" maxlength="24" autocomplete="off" style="flex:1;min-width:10rem" aria-describedby="friendErr">
+        <button class="btn btn-primary" type="submit">Add</button><button class="btn btn-ghost" type="button" data-action="cancel-friend">Cancel</button></div>
+        <span class="err" id="friendErr" hidden>Type a name to add a friend.</span></form>` : ""}
+    </div>`;
+  const summary = `${sizes[cs][0]} of ${typeName(UI.type).toLowerCase()}${UI.with.size ? " with " + withText([...UI.with]) : ""}`;
+  const hasAny = S.log.some(e => e.spotId === sp.id);
+  const title = UI.renaming
+    ? `<form id="renameForm" class="field" style="flex:1" novalidate><label for="renameInp">Spot name</label><input id="renameInp" type="text" maxlength="28" autocomplete="off" value="${esc(sp.name)}" aria-describedby="renameErr"><span class="err" id="renameErr" hidden>A spot needs a name.</span><div class="row-actions" style="margin-top:.5rem"><button class="btn btn-primary" type="submit">Save name</button><button class="btn btn-ghost" type="button" data-action="cancel-rename">Cancel</button></div></form>`
+    : `<div><div class="overline">Selected spot</div><h2>${esc(sp.name)}</h2></div><button class="btn btn-ghost" type="button" data-action="rename">Rename</button>`;
+  el.innerHTML = `<div class="win-title"><span>Log a drink</span><small>${last ? "Last one " + (dayKey(last)===new Date().toDateString() ? "at " + fmtTime(last) : dayLabel(last).toLowerCase()) : "Nothing logged here yet"}</small></div>
+    <div class="win-body">
+      <div class="spot-head">${title}</div>
+      <div class="counter"><span class="big">${n}</span><span class="muted">${plural(n,"drink","drinks")} here${w ? ` · ${w} alcohol-free` : ""}</span></div>
+      <fieldset class="types">
+        <legend>What are you having?</legend>
+        ${Object.keys(TYPES).map(k => `<label class="chip"><input type="radio" name="dtype" value="${k}" ${UI.type===k?"checked":""} ${TYPES[k].full ? `aria-label="${TYPES[k].full}"` : ""}><span>${icon(k)}${TYPES[k].label}</span></label>`).join("")}
+      </fieldset>
+      <fieldset class="sizes">
+        <legend>Size</legend>
+        ${sizes.map(([nm,ml],i) => `<label class="schip"><input type="radio" name="dsize" value="${i}" ${cs===i?"checked":""}><span>${nm}<small class="num">${fmtMl(ml)}</small></span></label>`).join("")}
+      </fieldset>
+      ${friendsBlock}
+      <button class="btn btn-primary btn-block logbtn" type="button" data-action="log"><span>Log it</span><small>${esc(summary)}</small></button>
+      <div class="row-actions" style="justify-content:space-between">
+        <button class="btn btn-ghost" type="button" data-action="undo-last" ${hasAny?"":"disabled"}>Remove last entry here</button>
+        <button class="btn btn-ghost" type="button" data-action="remove-spot">Remove spot</button>
+      </div>
+    </div>`;
+  el.querySelectorAll("input[name=dtype]").forEach(r => r.addEventListener("change", () => { UI.type = r.value; renderSpotPanel(stats()); const f = el.querySelector(`input[name=dtype][value="${UI.type}"]`); f && f.focus(); }));
+  el.querySelectorAll("input[name=dsize]").forEach(r => r.addEventListener("change", () => { UI.sizes[UI.type] = +r.value; renderSpotPanel(stats()); const f = el.querySelector(`input[name=dsize][value="${r.value}"]`); f && f.focus(); }));
+  if(UI.addingFriend){
+    const ff = $("friendForm"), fi = $("friendInp");
+    fi.focus();
+    ff.addEventListener("submit", ev => {
+      ev.preventDefault();
+      const v = fi.value.trim();
+      if(!v){ fi.setAttribute("aria-invalid","true"); $("friendErr").hidden = false; fi.focus(); return; }
+      const existing = S.friends.find(f => f.name.toLowerCase() === v.toLowerCase());
+      const f = existing || {id:uid(), name:v};
+      if(!existing) S.friends.push(f);
+      UI.with.add(f.id); UI.addingFriend = false; save(); renderSpotPanel(stats());
+      toast(existing ? `${f.name} is already in your friends. Tagged them.` : `${f.name} added and tagged.`);
+      const add = el.querySelector("[data-action=add-friend]"); add && add.focus();
+    });
+  }
+  if(UI.renaming){
+    const f = $("renameForm"), inp = $("renameInp");
+    inp.focus(); inp.select();
+    f.addEventListener("submit", ev => {
+      ev.preventDefault();
+      const v = inp.value.trim();
+      if(!v){ inp.setAttribute("aria-invalid","true"); $("renameErr").hidden = false; return; }
+      sp.name = v; UI.renaming = false; save(); renderAll(); toast("Name saved.");
+    });
+  }
+}
+function renderNext(st){
+  const next = REWARDS.filter(r => st[r.metric] < r.target).sort((a,b) => (a.target - st[a.metric]) - (b.target - st[b.metric]))[0];
+  const el = $("nextPanel");
+  if(!next){
+    el.innerHTML = `<div class="win-title"><span>Next reward</span></div><div class="win-body"><p style="margin:0">Every reward is unlocked. Your wardrobe is complete.</p></div>`;
+    return;
+  }
+  const have = st[next.metric], left = next.target - have;
+  el.innerHTML = `<div class="win-title"><span>Next reward</span><small>${left} to go</small></div>
+    <div class="win-body"><div class="next"><canvas class="px" id="nextCv" role="img" aria-label="${esc(ITEMS[next.item].name)} preview"></canvas>
+      <div style="display:grid;gap:.5rem"><div><strong>${esc(ITEMS[next.item].name)}</strong><div class="muted" style="font-size:.875rem">${esc(next.desc)}</div></div>
+      <div class="bar" role="progressbar" aria-label="Progress to ${esc(ITEMS[next.item].name)}" aria-valuemin="0" aria-valuemax="${next.target}" aria-valuenow="${have}"><i style="width:${have/next.target*100}%"></i></div>
+      <div class="muted num" style="font-size:.875rem">${have} of ${next.target}</div></div></div></div>`;
+  paintAvatar($("nextCv"), S.look, withItem(next.item));
+}
+function renderSpotList(st){
+  const list = S.spots.slice().sort((a,b) => (st.per[b.id]||0) - (st.per[a.id]||0) || a.name.localeCompare(b.name));
+  $("spotList").innerHTML = list.length ? list.map(sp => {
+    const n = st.per[sp.id]||0, last = st.last[sp.id];
+    return `<li><button class="spotrow" type="button" data-action="select" data-id="${sp.id}" aria-current="${sp.id===UI.selected && !UI.pending}">
+      <span class="swatch" style="background:${sp.color}"></span>
+      <span class="nm">${esc(sp.name)}<span class="sub">${last ? "Last: " + dayLabel(last) + ", " + fmtTime(last) : "No drinks yet"}</span></span>
+      <span class="ct" aria-label="${n} ${plural(n,"drink","drinks")}">${n}</span></button></li>`;
+  }).join("") : `<li class="muted" style="padding:.5rem 0">No spots yet.</li>`;
+  $("mapSub").textContent = `${S.spots.length} ${plural(S.spots.length,"spot","spots")}`;
+}
+function renderMapView(){
+  const st = stats();
+  renderStats(st); renderSpotPanel(st); renderNext(st); renderSpotList(st); drawMap();
+}
+
+/* ---------- Render: wardrobe ---------- */
+function renderWardrobe(){
+  const st = stats(), un = unlockedItems(st);
+  paintAvatar($("bigAvatar"), S.look, S.equipped);
+  $("wardCount").textContent = `${un.size} of ${Object.keys(ITEMS).length} items`;
+  const sw = (group, arr, names, cur) => `<div class="swatches" role="group">${arr.map((c,i) => `<button type="button" class="sw" style="background:${c}" aria-label="${names[i]}" aria-pressed="${cur===i}" data-action="look" data-k="${group}" data-v="${i}"></button>`).join("")}</div>`;
+  let html = `<h2 style="font-size:1.25rem">Your look</h2>
+    <div class="opt"><h3>Skin tone</h3>${sw("skin", SKINS, SKIN_NAMES, S.look.skin)}</div>
+    <div class="opt"><h3>Hair</h3><div class="seg" role="group" aria-label="Hair style">${STYLES.map((s,i) => `<button class="btn" type="button" aria-pressed="${S.look.hairStyle===i}" data-action="look" data-k="hairStyle" data-v="${i}">${s}</button>`).join("")}</div>${sw("hairColor", HAIRS, HAIR_NAMES, S.look.hairColor)}</div>
+    <div class="opt"><h3>T-shirt colour</h3>${sw("tee", TEES, TEE_NAMES, S.look.tee)}</div>
+    <h2 style="font-size:1.25rem;margin-top:.5rem">Rewards to wear</h2>`;
+  SLOTS.forEach(([slot, label]) => {
+    const items = Object.keys(ITEMS).filter(k => ITEMS[k].slot === slot);
+    html += `<div class="slotgrp"><h3 style="font-size:1rem">${label}</h3><div class="items">
+      <button class="item" type="button" data-action="equip" data-slot="${slot}" data-item="" aria-pressed="${!S.equipped[slot]}"><canvas class="px" data-prev="none:${slot}"></canvas>None</button>
+      ${items.map(k => {
+        const ok = un.has(k), r = rewardFor(k);
+        return `<button class="item" type="button" data-action="equip" data-slot="${slot}" data-item="${k}" aria-pressed="${S.equipped[slot]===k}" ${ok?"":`aria-disabled="true" aria-describedby="lk-${k}"`}>
+          ${ok?"":`<img class="ico lock" src="${ICONS.lock}" alt="">`}
+          <canvas class="px" data-prev="${k}"></canvas>${esc(ITEMS[k].name)}
+          ${ok?"":`<small id="lk-${k}">${esc(r.desc)}</small>`}</button>`;
+      }).join("")}</div></div>`;
+  });
+  $("wardOpts").innerHTML = html;
+  $("wardOpts").querySelectorAll("canvas[data-prev]").forEach(cv => {
+    const v = cv.dataset.prev;
+    if(v.startsWith("none:")){ const eq = Object.assign({}, S.equipped); eq[v.slice(5)] = null; paintAvatar(cv, S.look, eq); }
+    else paintAvatar(cv, S.look, withItem(v));
+  });
+}
+
+/* ---------- Render: rewards ---------- */
+function renderRewards(){
+  const st = stats();
+  const got = REWARDS.filter(r => st[r.metric] >= r.target).length;
+  $("rewCount").textContent = `${got} of ${REWARDS.length} unlocked`;
+  $("rewBar").style.width = (got/REWARDS.length*100) + "%";
+  $("rewardList").innerHTML = REWARDS.map(r => {
+    const have = progress(st, r), ok = st[r.metric] >= r.target, worn = S.equipped[ITEMS[r.item].slot] === r.item;
+    return `<article class="win reward${ok?"":" locked"}">
+      <canvas class="px" data-rprev="${r.item}" role="img" aria-label="${esc(ITEMS[r.item].name)}"></canvas>
+      <div class="meta">
+        <div class="top"><div><div class="overline">${esc(r.title)}</div><h3>${esc(ITEMS[r.item].name)}</h3></div>
+          ${ok ? `<span class="pill ok"><img class="ico" src="${ICONS.check}" alt="">Unlocked</span>` : `<span class="pill lock"><img class="ico" src="${ICONS.lock}" alt="">Locked</span>`}</div>
+        <div class="muted">${esc(r.desc)}</div>
+        <div class="bar" role="progressbar" aria-label="${esc(r.title)} progress" aria-valuemin="0" aria-valuemax="${r.target}" aria-valuenow="${have}"><i style="width:${have/r.target*100}%"></i></div>
+        <div class="row-actions" style="justify-content:space-between"><span class="muted num" style="font-size:.875rem">${have} of ${r.target}</span>
+        ${ok ? (worn ? `<span class="muted" style="font-size:.875rem">Wearing now</span>` : `<button class="btn" type="button" data-action="wear" data-item="${r.item}">Wear it</button>`) : ""}</div>
+      </div></article>`;
+  }).join("");
+  $("rewardList").querySelectorAll("canvas[data-rprev]").forEach(cv => paintAvatar(cv, S.look, withItem(cv.dataset.rprev)));
+}
+
+/* ---------- Render: history ---------- */
+function renderHistory(){
+  const st = stats();
+  $("histCount").textContent = `${S.log.length} ${plural(S.log.length,"entry","entries")}`;
+  const body = $("histBody");
+  if(!S.log.length){
+    body.innerHTML = `<div class="empty"><h2 style="font-size:1.25rem">Nothing logged yet</h2><p>Pick a spot on the map and log your first drink. It will show up here with the time and place.</p><a class="btn btn-primary" href="#map">Go to the map</a></div>`;
+    return;
+  }
+  const sorted = S.log.slice().sort((a,b) => b.t - a.t);
+  const groups = [];
+  sorted.forEach(e => { const k = dayKey(e.t); let g = groups[groups.length-1]; if(!g || g.k !== k){ g = {k, t:e.t, items:[]}; groups.push(g); } g.items.push(e); });
+  body.innerHTML = groups.map(g => {
+    const dn = g.items.length, wn = g.items.filter(e => !TYPES[e.type].alc).length;
+    const vol = g.items.reduce((s,e) => s + sizeOf(e)[1], 0);
+    return `<section class="day"><h3>${esc(dayLabel(g.t))} · ${dn} ${plural(dn,"drink","drinks")}${wn ? ` (${wn} alcohol-free)` : ""} · ${fmtMl(vol)}</h3>
+      ${g.items.map(e => {
+        const sp = spotById(e.spotId), nm = sp ? sp.name : "Removed spot";
+        const sz = sizeOf(e), w = withText(e.friends);
+        return `<div class="entry">${icon(e.type)}<div class="what">${esc(typeName(e.type))} <span class="muted">· ${esc(sz[0])}, ${fmtMl(sz[1])}</span><span class="sub">at ${esc(nm)}${w ? " with " + esc(w) : ""}</span></div><span class="t">${fmtTime(e.t)}</span>
+          <button class="btn icon-btn" type="button" data-action="del" data-id="${e.id}" aria-label="Remove ${esc(typeName(e.type).toLowerCase())} at ${esc(nm)}, ${fmtTime(e.t)}">${icon("trash")}</button></div>`;
+      }).join("")}</section>`;
+  }).join("");
+}
+
+function renderAll(){
+  const st = stats();
+  renderHeader(st);
+  renderMapView();
+  if(UI.tab === "wardrobe") renderWardrobe();
+  if(UI.tab === "rewards") renderRewards();
+  if(UI.tab === "history") renderHistory();
+}
+
+/* ---------- Events ---------- */
+document.addEventListener("click", ev => {
+  const b = ev.target.closest("[data-action]"); if(!b) return;
+  const a = b.dataset.action;
+  if(a === "log"){ if(UI.selected) logDrink(UI.selected, UI.type); }
+  else if(a === "select"){ selectSpot(b.dataset.id); if(window.matchMedia("(max-width:959px)").matches) $("spotPanel").scrollIntoView({block:"nearest", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth"}); }
+  else if(a === "add-spot-auto"){ const t = freeTile(); if(!t){ toast("The floor is full. Remove a spot to add another."); return; } UI.pending = {tx:t[0], ty:t[1]}; UI.renaming = false; location.hash !== "#map" && (location.hash = "map"); renderMapView(); $("newName") && $("newName").focus(); $("maphint").textContent = "Tip: tap any empty floor tile to place the spot exactly."; }
+  else if(a === "cancel-new"){ UI.pending = null; renderMapView(); }
+  else if(a === "rename"){ UI.renaming = true; renderMapView(); }
+  else if(a === "cancel-rename"){ UI.renaming = false; renderMapView(); }
+  else if(a === "remove-spot"){ removeSpot(UI.selected); }
+  else if(a === "undo-last"){ const last = S.log.filter(e => e.spotId === UI.selected).sort((x,y) => y.t - x.t)[0]; if(last) removeEntry(last.id); }
+  else if(a === "del"){ removeEntry(b.dataset.id); }
+  else if(a === "toggle-friend"){ const id = b.dataset.id; UI.with.has(id) ? UI.with.delete(id) : UI.with.add(id); renderSpotPanel(stats()); const f = document.querySelector(`[data-action=toggle-friend][data-id="${id}"]`); f && f.focus(); }
+  else if(a === "add-friend"){ UI.addingFriend = true; renderSpotPanel(stats()); }
+  else if(a === "cancel-friend"){ UI.addingFriend = false; renderSpotPanel(stats()); const f = document.querySelector("[data-action=add-friend]"); f && f.focus(); }
+  else if(a === "manage-friends"){ UI.managingFriends = !UI.managingFriends; UI.addingFriend = false; renderSpotPanel(stats()); const f = document.querySelector("[data-action=manage-friends]"); f && f.focus(); }
+  else if(a === "remove-friend"){
+    const id = b.dataset.id, idx = S.friends.findIndex(f => f.id === id); if(idx < 0) return;
+    const [f] = S.friends.splice(idx, 1); UI.with.delete(id);
+    if(!S.friends.length) UI.managingFriends = false;
+    enforceEquipped(); save(); renderAll();
+    toast(`Removed ${f.name}. Past drinks no longer show them.`, () => { S.friends.splice(idx, 0, f); save(); renderAll(); toast(`${f.name} is back.`); });
+  }
+  else if(a === "look"){ S.look[b.dataset.k] = +b.dataset.v; save(); renderHeader(stats()); renderWardrobe(); drawMap(); const again = document.querySelector(`[data-action=look][data-k="${b.dataset.k}"][data-v="${b.dataset.v}"]`); again && again.focus(); }
+  else if(a === "equip"){
+    const item = b.dataset.item, slot = b.dataset.slot;
+    if(item && b.getAttribute("aria-disabled") === "true"){ const r = rewardFor(item); toast(`Locked. ${r.desc} to unlock the ${ITEMS[item].name.toLowerCase()}.`); return; }
+    S.equipped[slot] = item || null; save(); renderHeader(stats()); renderWardrobe(); drawMap();
+    const again = document.querySelector(`[data-action=equip][data-slot="${slot}"][data-item="${item}"]`); again && again.focus();
+  }
+  else if(a === "wear"){ const it = b.dataset.item; S.equipped[ITEMS[it].slot] = it; save(); renderAll(); toast(`Wearing the ${ITEMS[it].name.toLowerCase()}.`); }
+});
+
+/* ---------- Routing ---------- */
+const TABS = ["map","wardrobe","rewards","history"];
+function route(){
+  const h = (location.hash || "").slice(1);
+  UI.tab = TABS.includes(h) ? h : "map";
+  TABS.forEach(t => { $("view-"+t).hidden = t !== UI.tab; });
+  document.querySelectorAll("nav.tabs a").forEach(a => { if(a.dataset.tab === UI.tab) a.setAttribute("aria-current","page"); else a.removeAttribute("aria-current"); });
+  renderAll();
+}
+window.addEventListener("hashchange", route);
+window.addEventListener("resize", () => drawMap());
+
+if(enforceEquipped()) save();
+route();
+initRemote();
+})();
+</script>
+</body>
+</html>
