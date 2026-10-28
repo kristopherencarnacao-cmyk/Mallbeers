@@ -229,6 +229,8 @@ dialog::backdrop{background:rgba(8,14,20,.65)}
 .dlg-stage canvas{width:96px;height:162px;display:block}
 .dlg-body p{margin:0}
 .dlg-actions{display:grid;gap:.5rem;width:100%}
+.form-body{padding:1.25rem;display:grid;gap:1rem}
+.form-body .row-actions{justify-content:flex-end}
 
 footer.foot{max-width:1200px;margin:0 auto;padding:0 1rem 1.5rem;color:#b9c6d2;font-size:.875rem;display:flex;flex-wrap:wrap;gap:.25rem 1rem;justify-content:space-between}
 @media (max-width:767px){footer.foot{padding-bottom:calc(88px + env(safe-area-inset-bottom))}}
@@ -341,6 +343,21 @@ footer.foot{max-width:1200px;margin:0 auto;padding:0 1rem 1.5rem;color:#b9c6d2;f
   </div>
 </dialog>
 
+<dialog id="formDlg" aria-labelledby="formDlgTitle">
+  <div class="win-title"><span id="formDlgTitle">New spot</span><small id="formDlgSub"></small></div>
+  <form class="form-body" id="formDlgForm" novalidate>
+    <div class="field">
+      <label for="formDlgInp" id="formDlgLbl">Name</label>
+      <input id="formDlgInp" type="text" autocomplete="off" aria-describedby="formDlgErr">
+      <span class="err" id="formDlgErr" hidden></span>
+    </div>
+    <div class="row-actions">
+      <button class="btn btn-ghost" type="button" id="formDlgCancel">Cancel</button>
+      <button class="btn btn-primary" type="submit" id="formDlgOk">Save</button>
+    </div>
+  </form>
+</dialog>
+
 <script>
 (function(){
 "use strict";
@@ -437,7 +454,7 @@ function sanitize(s){
 function loadLocal(){ try{ const raw = localStorage.getItem(LS_KEY); return raw ? sanitize(JSON.parse(raw)) : null; }catch(e){ return null; } }
 
 let S = loadLocal() || defaultState();
-const UI = { selected: (S.spots[0]||{}).id || null, type:"beer", sizes:{}, with:new Set(), addingFriend:false, managingFriends:false, pending:null, renaming:false, hover:null, tab:"map" };
+const UI = { selected: (S.spots[0]||{}).id || null, type:"beer", sizes:{}, with:new Set(), managingFriends:false, pending:null, hover:null, tab:"map" };
 const curSize = () => UI.sizes[UI.type] != null ? UI.sizes[UI.type] : TYPES[UI.type].def;
 const friendName = id => (S.friends.find(f => f.id === id) || {}).name;
 function withText(ids){
@@ -769,13 +786,38 @@ mapC.addEventListener("click", e => {
   const sp = S.spots.find(p => p.tx===tx && p.ty===ty);
   if(sp){ selectSpot(sp.id); return; }
   if(BLOCKED.has(tx+","+ty)){ toast(tx===3||tx===4 ? "That's the fountain. Pick an open floor tile." : "That's a planter. Pick an open floor tile."); return; }
-  UI.pending = {tx,ty}; UI.renaming = false;
-  renderMapView();
-  const inp = $("newName"); if(inp) inp.focus();
+  newSpot(tx, ty);
 });
 
 /* ---------- Actions ---------- */
-function selectSpot(id){ UI.selected = id; UI.pending = null; UI.renaming = false; renderMapView(); }
+function selectSpot(id){ UI.selected = id; UI.pending = null; renderMapView(); }
+function newSpot(tx, ty){
+  UI.pending = {tx,ty}; renderMapView();
+  askText({title:"New spot", sub:`Tile ${tx+1}, ${ty+1}`, label:"Spot name", placeholder:"e.g. Arcade bar", max:28, submit:"Add spot",
+    err:"Give this spot a name so you can find it later.",
+    onCancel: () => { UI.pending = null; renderMapView(); },
+    onSubmit: name => {
+      const sp = {id:uid(), name, tx, ty, color:SPOT_COLORS[S.spots.length % SPOT_COLORS.length], custom:true};
+      S.spots.push(sp); UI.selected = sp.id; UI.pending = null; save(); renderAll();
+      toast(`${name} added to the map.`);
+      checkUnlocks();
+    }});
+}
+function renameSpot(){
+  const sp = spotById(UI.selected); if(!sp) return;
+  askText({title:"Rename spot", label:"Spot name", value:sp.name, max:28, submit:"Save name", err:"A spot needs a name.", refocus:"[data-action=rename]",
+    onSubmit: v => { sp.name = v; save(); renderAll(); toast("Name saved."); }});
+}
+function addFriend(){
+  askText({title:"Add a friend", label:"Friend's name", max:24, submit:"Add", err:"Type a name to add a friend.", refocus:"[data-action=add-friend]",
+    onSubmit: v => {
+      const existing = S.friends.find(f => f.name.toLowerCase() === v.toLowerCase());
+      const f = existing || {id:uid(), name:v};
+      if(!existing) S.friends.push(f);
+      UI.with.add(f.id); save(); renderSpotPanel(stats());
+      toast(existing ? `${f.name} is already in your friends. Tagged them.` : `${f.name} added and tagged.`);
+    }});
+}
 function freeTile(){
   const taken = new Set(S.spots.map(p => p.tx+","+p.ty));
   const order = [];
@@ -816,7 +858,7 @@ function removeSpot(id){
   S.spots = S.spots.filter(p => p.id !== id);
   S.log = S.log.filter(e => e.spotId !== id);
   enforceEquipped();
-  UI.selected = (S.spots[0]||{}).id || null; UI.renaming = false;
+  UI.selected = (S.spots[0]||{}).id || null;
   save(); renderAll();
   toast(`Removed ${sp.name}${n ? ` and ${n} ${plural(n,"entry","entries")}` : ""}.`, () => { S.spots = spots; S.log = log; S.equipped = eq; UI.selected = id; save(); renderAll(); toast(`${sp.name} is back.`); });
 }
@@ -851,6 +893,38 @@ $("dlgWear").addEventListener("click", () => {
 });
 $("dlgLater").addEventListener("click", () => $("unlockDlg").close());
 
+/* ---------- Form dialog ---------- */
+let formSubmit = null, formCancel = null, formReturn = null, formRefocus = null;
+function askText(o){
+  const d = $("formDlg"), inp = $("formDlgInp"), err = $("formDlgErr");
+  $("formDlgTitle").textContent = o.title;
+  $("formDlgSub").textContent = o.sub || "";
+  $("formDlgLbl").textContent = o.label;
+  $("formDlgOk").textContent = o.submit;
+  inp.maxLength = o.max; inp.placeholder = o.placeholder || ""; inp.value = o.value || "";
+  inp.removeAttribute("aria-invalid"); err.textContent = o.err; err.hidden = true;
+  formSubmit = o.onSubmit; formCancel = o.onCancel || null;
+  formReturn = document.activeElement; formRefocus = o.refocus || null;
+  try{ d.showModal(); }catch(e){ d.setAttribute("open",""); }
+  inp.focus(); if(o.value) inp.select();
+}
+function closeForm(){ const d = $("formDlg"); if(d.open) d.close(); }
+$("formDlgForm").addEventListener("submit", ev => {
+  ev.preventDefault();
+  const inp = $("formDlgInp"), v = inp.value.trim();
+  if(!v){ inp.setAttribute("aria-invalid","true"); $("formDlgErr").hidden = false; inp.focus(); return; }
+  const f = formSubmit; formSubmit = null; closeForm(); f && f(v);
+});
+$("formDlgInp").addEventListener("input", e => { if(e.target.value.trim()){ e.target.removeAttribute("aria-invalid"); $("formDlgErr").hidden = true; } });
+$("formDlgCancel").addEventListener("click", closeForm);
+$("formDlg").addEventListener("click", e => { if(e.target === e.currentTarget) closeForm(); });
+$("formDlg").addEventListener("close", () => {
+  const cancel = formSubmit ? formCancel : null; formSubmit = formCancel = null;
+  cancel && cancel();
+  const r = formReturn && formReturn.isConnected ? formReturn : (formRefocus && document.querySelector(formRefocus));
+  r && r.focus && r.focus();
+});
+
 /* ---------- Render: map view ---------- */
 function renderHeader(st){
   $("hdrTotal").textContent = st.total;
@@ -869,33 +943,6 @@ function renderStats(st){
 }
 function renderSpotPanel(st){
   const el = $("spotPanel");
-  if(UI.pending){
-    el.innerHTML = `<div class="win-title"><span>New spot</span><small>Tile ${UI.pending.tx+1}, ${UI.pending.ty+1}</small></div>
-      <form class="win-body" id="newSpotForm" novalidate>
-        <div class="field">
-          <label for="newName">Spot name</label>
-          <input id="newName" name="name" type="text" maxlength="28" autocomplete="off" placeholder="e.g. Arcade bar" aria-describedby="newNameErr">
-          <span class="err" id="newNameErr" hidden>Give this spot a name so you can find it later.</span>
-        </div>
-        <div class="row-actions">
-          <button class="btn btn-primary" type="submit">Add spot</button>
-          <button class="btn btn-ghost" type="button" data-action="cancel-new">Cancel</button>
-        </div>
-      </form>`;
-    const inp = $("newName");
-    inp.addEventListener("blur", () => { if(inp.value.trim() === "" && document.activeElement !== el.querySelector("[data-action=cancel-new]")) {} });
-    $("newSpotForm").addEventListener("submit", ev => {
-      ev.preventDefault();
-      const name = inp.value.trim();
-      if(!name){ inp.setAttribute("aria-invalid","true"); $("newNameErr").hidden = false; inp.focus(); return; }
-      const sp = {id:uid(), name, tx:UI.pending.tx, ty:UI.pending.ty, color:SPOT_COLORS[S.spots.length % SPOT_COLORS.length], custom:true};
-      S.spots.push(sp); UI.selected = sp.id; UI.pending = null; save(); renderAll();
-      toast(`${name} added to the map.`);
-      checkUnlocks();
-    });
-    inp.addEventListener("input", () => { if(inp.value.trim()){ inp.removeAttribute("aria-invalid"); $("newNameErr").hidden = true; } });
-    return;
-  }
   const sp = spotById(UI.selected);
   if(!sp){
     el.innerHTML = `<div class="win-title"><span>No spot selected</span></div>
@@ -911,17 +958,11 @@ function renderSpotPanel(st){
       <div class="listhead"><span id="withLbl" style="font-weight:500">Who's with you? <span class="muted" style="font-weight:400">(optional)</span></span>
         ${S.friends.length ? `<button class="btn btn-ghost" type="button" data-action="manage-friends">${UI.managingFriends ? "Done" : "Edit friends"}</button>` : ""}</div>
       <div class="fchips">${friendChips}
-        ${UI.managingFriends ? "" : (UI.addingFriend ? "" : `<button class="fchip add" type="button" data-action="add-friend">+ Add friend</button>`)}</div>
-      ${UI.addingFriend ? `<form id="friendForm" class="field" novalidate><label for="friendInp">Friend's name</label>
-        <div class="row-actions"><input id="friendInp" type="text" maxlength="24" autocomplete="off" style="flex:1;min-width:10rem" aria-describedby="friendErr">
-        <button class="btn btn-primary" type="submit">Add</button><button class="btn btn-ghost" type="button" data-action="cancel-friend">Cancel</button></div>
-        <span class="err" id="friendErr" hidden>Type a name to add a friend.</span></form>` : ""}
+        ${UI.managingFriends ? "" : `<button class="fchip add" type="button" data-action="add-friend">+ Add friend</button>`}</div>
     </div>`;
   const summary = `${sizes[cs][0]} of ${typeName(UI.type).toLowerCase()}${UI.with.size ? " with " + withText([...UI.with]) : ""}`;
   const hasAny = S.log.some(e => e.spotId === sp.id);
-  const title = UI.renaming
-    ? `<form id="renameForm" class="field" style="flex:1" novalidate><label for="renameInp">Spot name</label><input id="renameInp" type="text" maxlength="28" autocomplete="off" value="${esc(sp.name)}" aria-describedby="renameErr"><span class="err" id="renameErr" hidden>A spot needs a name.</span><div class="row-actions" style="margin-top:.5rem"><button class="btn btn-primary" type="submit">Save name</button><button class="btn btn-ghost" type="button" data-action="cancel-rename">Cancel</button></div></form>`
-    : `<div><div class="overline">Selected spot</div><h2>${esc(sp.name)}</h2></div><button class="btn btn-ghost" type="button" data-action="rename">Rename</button>`;
+  const title = `<div><div class="overline">Selected spot</div><h2>${esc(sp.name)}</h2></div><button class="btn btn-ghost" type="button" data-action="rename">Rename</button>`;
   el.innerHTML = `<div class="win-title"><span>Log a drink</span><small>${last ? "Last one " + (dayKey(last)===new Date().toDateString() ? "at " + fmtTime(last) : dayLabel(last).toLowerCase()) : "Nothing logged here yet"}</small></div>
     <div class="win-body">
       <div class="spot-head">${title}</div>
@@ -943,31 +984,6 @@ function renderSpotPanel(st){
     </div>`;
   el.querySelectorAll("input[name=dtype]").forEach(r => r.addEventListener("change", () => { UI.type = r.value; renderSpotPanel(stats()); const f = el.querySelector(`input[name=dtype][value="${UI.type}"]`); f && f.focus(); }));
   el.querySelectorAll("input[name=dsize]").forEach(r => r.addEventListener("change", () => { UI.sizes[UI.type] = +r.value; renderSpotPanel(stats()); const f = el.querySelector(`input[name=dsize][value="${r.value}"]`); f && f.focus(); }));
-  if(UI.addingFriend){
-    const ff = $("friendForm"), fi = $("friendInp");
-    fi.focus();
-    ff.addEventListener("submit", ev => {
-      ev.preventDefault();
-      const v = fi.value.trim();
-      if(!v){ fi.setAttribute("aria-invalid","true"); $("friendErr").hidden = false; fi.focus(); return; }
-      const existing = S.friends.find(f => f.name.toLowerCase() === v.toLowerCase());
-      const f = existing || {id:uid(), name:v};
-      if(!existing) S.friends.push(f);
-      UI.with.add(f.id); UI.addingFriend = false; save(); renderSpotPanel(stats());
-      toast(existing ? `${f.name} is already in your friends. Tagged them.` : `${f.name} added and tagged.`);
-      const add = el.querySelector("[data-action=add-friend]"); add && add.focus();
-    });
-  }
-  if(UI.renaming){
-    const f = $("renameForm"), inp = $("renameInp");
-    inp.focus(); inp.select();
-    f.addEventListener("submit", ev => {
-      ev.preventDefault();
-      const v = inp.value.trim();
-      if(!v){ inp.setAttribute("aria-invalid","true"); $("renameErr").hidden = false; return; }
-      sp.name = v; UI.renaming = false; save(); renderAll(); toast("Name saved.");
-    });
-  }
 }
 function renderNext(st){
   const next = REWARDS.filter(r => st[r.metric] < r.target).sort((a,b) => (a.target - st[a.metric]) - (b.target - st[b.metric]))[0];
@@ -1093,17 +1109,14 @@ document.addEventListener("click", ev => {
   const a = b.dataset.action;
   if(a === "log"){ if(UI.selected) logDrink(UI.selected, UI.type); }
   else if(a === "select"){ selectSpot(b.dataset.id); if(window.matchMedia("(max-width:959px)").matches) $("spotPanel").scrollIntoView({block:"nearest", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth"}); }
-  else if(a === "add-spot-auto"){ const t = freeTile(); if(!t){ toast("The floor is full. Remove a spot to add another."); return; } UI.pending = {tx:t[0], ty:t[1]}; UI.renaming = false; location.hash !== "#map" && (location.hash = "map"); renderMapView(); $("newName") && $("newName").focus(); $("maphint").textContent = "Tip: tap any empty floor tile to place the spot exactly."; }
-  else if(a === "cancel-new"){ UI.pending = null; renderMapView(); }
-  else if(a === "rename"){ UI.renaming = true; renderMapView(); }
-  else if(a === "cancel-rename"){ UI.renaming = false; renderMapView(); }
+  else if(a === "add-spot-auto"){ const t = freeTile(); if(!t){ toast("The floor is full. Remove a spot to add another."); return; } location.hash !== "#map" && (location.hash = "map"); newSpot(t[0], t[1]); }
+  else if(a === "rename"){ renameSpot(); }
   else if(a === "remove-spot"){ removeSpot(UI.selected); }
   else if(a === "undo-last"){ const last = S.log.filter(e => e.spotId === UI.selected).sort((x,y) => y.t - x.t)[0]; if(last) removeEntry(last.id); }
   else if(a === "del"){ removeEntry(b.dataset.id); }
   else if(a === "toggle-friend"){ const id = b.dataset.id; UI.with.has(id) ? UI.with.delete(id) : UI.with.add(id); renderSpotPanel(stats()); const f = document.querySelector(`[data-action=toggle-friend][data-id="${id}"]`); f && f.focus(); }
-  else if(a === "add-friend"){ UI.addingFriend = true; renderSpotPanel(stats()); }
-  else if(a === "cancel-friend"){ UI.addingFriend = false; renderSpotPanel(stats()); const f = document.querySelector("[data-action=add-friend]"); f && f.focus(); }
-  else if(a === "manage-friends"){ UI.managingFriends = !UI.managingFriends; UI.addingFriend = false; renderSpotPanel(stats()); const f = document.querySelector("[data-action=manage-friends]"); f && f.focus(); }
+  else if(a === "add-friend"){ addFriend(); }
+  else if(a === "manage-friends"){ UI.managingFriends = !UI.managingFriends; renderSpotPanel(stats()); const f = document.querySelector("[data-action=manage-friends]"); f && f.focus(); }
   else if(a === "remove-friend"){
     const id = b.dataset.id, idx = S.friends.findIndex(f => f.id === id); if(idx < 0) return;
     const [f] = S.friends.splice(idx, 1); UI.with.delete(id);
